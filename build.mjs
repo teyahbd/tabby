@@ -5,8 +5,11 @@ await rm("dist", { recursive: true, force: true });
 await mkdir("dist", { recursive: true });
 
 await esbuild.build({
-	entryPoints: ["src/content/index.ts"],
-	outfile: "dist/content.js",
+	entryPoints: {
+		content: "src/content/index.ts",
+		background: "src/background/index.ts",
+	},
+	outdir: "dist",
 	bundle: true,
 	format: "iife",
 	target: "chrome120",

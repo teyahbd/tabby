@@ -1,5 +1,30 @@
 "use strict";
 (() => {
+  // src/platform/leader.ts
+  var LEADER_KEY = "leaderTabId";
+
+  // src/platform/storage.ts
+  function createChromeStorage(area = chrome.storage.local) {
+    return {
+      async get(key) {
+        const out = await area.get(key);
+        return out[key] ?? null;
+      },
+      async set(key, value) {
+        await area.set({ [key]: value });
+      },
+      subscribe(key, onChange) {
+        const listener = (changes) => {
+          if (key in changes) {
+            onChange(changes[key].newValue ?? null);
+          }
+        };
+        area.onChanged.addListener(listener);
+        return () => area.onChanged.removeListener(listener);
+      }
+    };
+  }
+
   // src/render/layout.ts
   var PET_SIZE = 48;
   var BASE_MARGIN = 24;
@@ -40,5 +65,23 @@
   }
 
   // src/content/index.ts
-  mountPet();
+  var storage = createChromeStorage();
+  var unmount = null;
+  var myTabId = null;
+  function apply(leaderTabId) {
+    const isLeader = myTabId != null && leaderTabId === myTabId;
+    if (isLeader && !unmount) {
+      unmount = mountPet();
+    } else if (!isLeader && unmount) {
+      unmount();
+      unmount = null;
+    }
+  }
+  async function init() {
+    const response = await chrome.runtime.sendMessage({ type: "tabby:whoami" });
+    myTabId = response?.tabId ?? null;
+    storage.subscribe(LEADER_KEY, apply);
+    apply(await storage.get(LEADER_KEY));
+  }
+  void init();
 })();
