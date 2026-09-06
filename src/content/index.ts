@@ -10,7 +10,7 @@ let myTabId: number | null = null;
 function apply(leaderTabId: number | null): void {
 	const isLeader = myTabId != null && leaderTabId === myTabId;
 	if (isLeader && !unmount) {
-		unmount = mountPet();
+		unmount = mountPet(storage);
 	} else if (!isLeader && unmount) {
 		unmount();
 		unmount = null;

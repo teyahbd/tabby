@@ -1,8 +1,19 @@
-import { basePosition, type Point } from "./layout.ts";
+import type { Storage } from "../platform/storage.ts";
+import { PET_STATE_KEY, resumeSnapshot, type PetSnapshot } from "./petState.ts";
 
 const ROOT_ID = "tabby-root";
 
-export function mountPet(doc: Document = document): () => void {
+function viewport(doc: Document) {
+	return {
+		width: doc.documentElement.clientWidth,
+		height: doc.documentElement.clientHeight,
+	};
+}
+
+export function mountPet(
+	storage: Storage,
+	doc: Document = document,
+): () => void {
 	if (doc.getElementById(ROOT_ID)) return () => {};
 
 	const root = doc.createElement("div");
@@ -14,22 +25,31 @@ export function mountPet(doc: Document = document): () => void {
 	sprite.setAttribute("aria-label", "Tabby");
 	root.appendChild(sprite);
 
-	const place = () => {
-		const pos: Point = basePosition({
-			width: doc.documentElement.clientWidth,
-			height: doc.documentElement.clientHeight,
-		});
-		root.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+	let snapshot: PetSnapshot | null = null;
+	let disposed = false;
+
+	const render = () => {
+		if (!snapshot) return;
+		root.style.transform = `translate(${snapshot.x}px, ${snapshot.y}px)`;
+		root.dataset.state = snapshot.currentState;
+		root.dataset.facing = snapshot.facing;
 	};
 
 	doc.body.appendChild(root);
-	place();
 
-	const view = doc.defaultView;
-	view?.addEventListener("resize", place);
+	void (async () => {
+		const saved = await storage.get<unknown>(PET_STATE_KEY);
+		if (disposed) return;
+		const resumed = resumeSnapshot(saved, viewport(doc), Date.now());
+		snapshot = resumed;
+		render();
+		if (JSON.stringify(saved) !== JSON.stringify(resumed)) {
+			await storage.set(PET_STATE_KEY, resumed);
+		}
+	})();
 
 	return () => {
-		view?.removeEventListener("resize", place);
+		disposed = true;
 		root.remove();
 	};
 }

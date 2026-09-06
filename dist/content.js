@@ -28,16 +28,55 @@
   // src/render/layout.ts
   var PET_SIZE = 48;
   var BASE_MARGIN = 24;
-  function basePosition(viewport, petSize = PET_SIZE) {
+  function basePosition(viewport2, petSize = PET_SIZE) {
     return {
-      x: Math.max(0, viewport.width - petSize - BASE_MARGIN),
-      y: Math.max(0, viewport.height - petSize - BASE_MARGIN)
+      x: Math.max(0, viewport2.width - petSize - BASE_MARGIN),
+      y: Math.max(0, viewport2.height - petSize - BASE_MARGIN)
     };
+  }
+
+  // src/render/petState.ts
+  var PET_STATE_KEY = "petState";
+  var STABLE_STATES = /* @__PURE__ */ new Set([
+    "IdleSit",
+    "IdleLie",
+    "Napping",
+    "AtBase",
+    "Sleeping"
+  ]);
+  function isStable(state) {
+    return STABLE_STATES.has(state);
+  }
+  function initialSnapshot(viewport2, now = Date.now()) {
+    const pos = basePosition(viewport2);
+    return {
+      x: pos.x,
+      y: pos.y,
+      facing: "left",
+      currentState: "IdleSit",
+      stateEnteredAt: now
+    };
+  }
+  function isPetSnapshot(value) {
+    if (typeof value !== "object" || value === null) return false;
+    const v = value;
+    return typeof v.x === "number" && typeof v.y === "number" && (v.facing === "left" || v.facing === "right") && typeof v.currentState === "string" && typeof v.stateEnteredAt === "number";
+  }
+  function resumeSnapshot(saved, viewport2, now = Date.now()) {
+    if (!isPetSnapshot(saved)) return initialSnapshot(viewport2, now);
+    if (isStable(saved.currentState)) return saved;
+    return { ...saved, currentState: "IdleSit", stateEnteredAt: now };
   }
 
   // src/render/pet.ts
   var ROOT_ID = "tabby-root";
-  function mountPet(doc = document) {
+  function viewport(doc) {
+    return {
+      width: doc.documentElement.clientWidth,
+      height: doc.documentElement.clientHeight
+    };
+  }
+  function mountPet(storage2, doc = document) {
     if (doc.getElementById(ROOT_ID)) return () => {
     };
     const root = doc.createElement("div");
@@ -47,19 +86,27 @@
     sprite.setAttribute("role", "img");
     sprite.setAttribute("aria-label", "Tabby");
     root.appendChild(sprite);
-    const place = () => {
-      const pos = basePosition({
-        width: doc.documentElement.clientWidth,
-        height: doc.documentElement.clientHeight
-      });
-      root.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+    let snapshot = null;
+    let disposed = false;
+    const render = () => {
+      if (!snapshot) return;
+      root.style.transform = `translate(${snapshot.x}px, ${snapshot.y}px)`;
+      root.dataset.state = snapshot.currentState;
+      root.dataset.facing = snapshot.facing;
     };
     doc.body.appendChild(root);
-    place();
-    const view = doc.defaultView;
-    view?.addEventListener("resize", place);
+    void (async () => {
+      const saved = await storage2.get(PET_STATE_KEY);
+      if (disposed) return;
+      const resumed = resumeSnapshot(saved, viewport(doc), Date.now());
+      snapshot = resumed;
+      render();
+      if (JSON.stringify(saved) !== JSON.stringify(resumed)) {
+        await storage2.set(PET_STATE_KEY, resumed);
+      }
+    })();
     return () => {
-      view?.removeEventListener("resize", place);
+      disposed = true;
       root.remove();
     };
   }
@@ -71,7 +118,7 @@
   function apply(leaderTabId) {
     const isLeader = myTabId != null && leaderTabId === myTabId;
     if (isLeader && !unmount) {
-      unmount = mountPet();
+      unmount = mountPet(storage);
     } else if (!isLeader && unmount) {
       unmount();
       unmount = null;
