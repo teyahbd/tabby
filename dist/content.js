@@ -25,6 +25,45 @@
     };
   }
 
+  // src/render/idleLoop.ts
+  var IDLE_MIN_MS = 3e4;
+  var IDLE_MAX_MS = 9e4;
+  var IDLE_POSES = /* @__PURE__ */ new Set([
+    "IdleSit",
+    "IdleLie"
+  ]);
+  function isIdlePose(state) {
+    return IDLE_POSES.has(state);
+  }
+  function idleDelayMs(rng = Math.random) {
+    return IDLE_MIN_MS + Math.floor(rng() * (IDLE_MAX_MS - IDLE_MIN_MS));
+  }
+  function nextIdlePose(current, rng = Math.random) {
+    return {
+      currentState: current === "IdleSit" ? "IdleLie" : "IdleSit",
+      facing: rng() < 0.5 ? "left" : "right"
+    };
+  }
+  function startIdleLoop(deps) {
+    const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+    const clearTimer = deps.clearTimer ?? ((handle2) => clearTimeout(handle2));
+    const rng = deps.rng ?? Math.random;
+    let handle = null;
+    const arm = () => {
+      handle = setTimer(() => {
+        if (isIdlePose(deps.getState())) {
+          deps.onFlip(nextIdlePose(deps.getState(), rng));
+        }
+        arm();
+      }, idleDelayMs(rng));
+    };
+    arm();
+    return () => {
+      if (handle != null) clearTimer(handle);
+      handle = null;
+    };
+  }
+
   // src/render/layout.ts
   var PET_SIZE = 48;
   var BASE_MARGIN = 24;
@@ -88,6 +127,7 @@
     root.appendChild(sprite);
     let snapshot = null;
     let disposed = false;
+    let stopIdle = null;
     const render = () => {
       if (!snapshot) return;
       root.style.transform = `translate(${snapshot.x}px, ${snapshot.y}px)`;
@@ -104,9 +144,24 @@
       if (JSON.stringify(saved) !== JSON.stringify(resumed)) {
         await storage2.set(PET_STATE_KEY, resumed);
       }
+      stopIdle = startIdleLoop({
+        getState: () => snapshot?.currentState ?? "IdleSit",
+        onFlip: ({ currentState, facing }) => {
+          if (!snapshot) return;
+          snapshot = {
+            ...snapshot,
+            currentState,
+            facing,
+            stateEnteredAt: Date.now()
+          };
+          render();
+          void storage2.set(PET_STATE_KEY, snapshot);
+        }
+      });
     })();
     return () => {
       disposed = true;
+      stopIdle?.();
       root.remove();
     };
   }
