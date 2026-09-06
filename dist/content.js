@@ -422,6 +422,43 @@
     };
   }
 
+  // src/render/petting.ts
+  var PET_SUPPRESSED_STATES = /* @__PURE__ */ new Set([
+    "Dragged",
+    "Sleeping",
+    "Napping",
+    "Eating"
+  ]);
+  var PET_MOVE_TOLERANCE_PX = 4;
+  function canPet(state) {
+    return !PET_SUPPRESSED_STATES.has(state);
+  }
+  function startPetting(deps) {
+    let downAt = null;
+    const onDown = (event) => {
+      const e = event;
+      if (e.button > 0) return;
+      downAt = { x: e.clientX, y: e.clientY };
+    };
+    const onClick = (event) => {
+      const e = event;
+      const start = downAt;
+      downAt = null;
+      if (!start) return;
+      if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > PET_MOVE_TOLERANCE_PX) {
+        return;
+      }
+      if (!canPet(deps.getState())) return;
+      deps.onPet();
+    };
+    deps.sprite.addEventListener("pointerdown", onDown);
+    deps.sprite.addEventListener("click", onClick);
+    return () => {
+      deps.sprite.removeEventListener("pointerdown", onDown);
+      deps.sprite.removeEventListener("click", onClick);
+    };
+  }
+
   // src/render/petState.ts
   var PET_STATE_KEY = "petState";
   var STABLE_STATES = /* @__PURE__ */ new Set([
@@ -455,6 +492,56 @@
     return { ...saved, currentState: "IdleSit", stateEnteredAt: now };
   }
 
+  // src/render/reaction.ts
+  var PURR_BASE_HZ = [55, 62, 70];
+  function spawnHearts(container, doc = document, rng = Math.random) {
+    const count = 1 + Math.floor(rng() * 3);
+    for (let i = 0; i < count; i++) {
+      const heart = doc.createElement("div");
+      heart.className = "tabby-heart";
+      heart.textContent = "\u2665";
+      heart.style.setProperty("--dx", `${Math.round((rng() - 0.5) * 32)}px`);
+      heart.style.setProperty("--delay", `${i * 90}ms`);
+      heart.addEventListener("animationend", () => heart.remove());
+      container.appendChild(heart);
+    }
+  }
+  function playPurr(rng = Math.random) {
+    const Ctor = globalThis.AudioContext ?? globalThis.webkitAudioContext;
+    if (!Ctor) return;
+    const ctx = new Ctor();
+    const now = ctx.currentTime;
+    const dur = 0.55;
+    const base = PURR_BASE_HZ[Math.floor(rng() * PURR_BASE_HZ.length)] ?? 60;
+    const osc = ctx.createOscillator();
+    osc.type = "sawtooth";
+    osc.frequency.value = base;
+    const lowpass = ctx.createBiquadFilter();
+    lowpass.type = "lowpass";
+    lowpass.frequency.value = 320;
+    const lfo = ctx.createOscillator();
+    lfo.type = "sine";
+    lfo.frequency.value = 25;
+    const lfoDepth = ctx.createGain();
+    lfoDepth.gain.value = 0.35;
+    const amp = ctx.createGain();
+    amp.gain.setValueAtTime(0, now);
+    amp.gain.linearRampToValueAtTime(0.5, now + 0.08);
+    amp.gain.setValueAtTime(0.5, now + dur - 0.15);
+    amp.gain.linearRampToValueAtTime(0, now + dur);
+    lfo.connect(lfoDepth).connect(amp.gain);
+    osc.connect(lowpass).connect(amp).connect(ctx.destination);
+    osc.start(now);
+    lfo.start(now);
+    osc.stop(now + dur);
+    lfo.stop(now + dur);
+    osc.onended = () => void ctx.close();
+  }
+  function reactToPet(root, doc = document, rng = Math.random) {
+    spawnHearts(root, doc, rng);
+    playPurr(rng);
+  }
+
   // src/render/pet.ts
   var ROOT_ID = "tabby-root";
   function viewport(doc) {
@@ -480,6 +567,7 @@
     let stopNap = null;
     let stopNight = null;
     let stopDrag = null;
+    let stopPetting = null;
     const render = () => {
       if (!snapshot) return;
       root.style.transform = `translate(${snapshot.x}px, ${snapshot.y}px)`;
@@ -566,6 +654,11 @@
         onDrag: ({ x, y }) => patchSnapshot({ x, y }, false),
         onDrop: ({ currentState, x, y }) => patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() })
       });
+      stopPetting = startPetting({
+        sprite,
+        getState: () => snapshot?.currentState ?? "IdleSit",
+        onPet: () => reactToPet(root, doc)
+      });
     })();
     return () => {
       disposed = true;
@@ -574,6 +667,7 @@
       stopNap?.();
       stopNight?.();
       stopDrag?.();
+      stopPetting?.();
       unmountBed();
       root.remove();
     };

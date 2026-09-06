@@ -4,7 +4,9 @@ import { startDragInput } from "./dragInput.ts";
 import { startIdleLoop } from "./idleLoop.ts";
 import { startNapLoop } from "./napLoop.ts";
 import { startNightLoop } from "./nightLoop.ts";
+import { startPetting } from "./petting.ts";
 import { PET_STATE_KEY, resumeSnapshot, type PetSnapshot } from "./petState.ts";
+import { reactToPet } from "./reaction.ts";
 import { startWalkLoop } from "./walkLoop.ts";
 
 const ROOT_ID = "tabby-root";
@@ -38,6 +40,7 @@ export function mountPet(
 	let stopNap: (() => void) | null = null;
 	let stopNight: (() => void) | null = null;
 	let stopDrag: (() => void) | null = null;
+	let stopPetting: (() => void) | null = null;
 
 	const render = () => {
 		if (!snapshot) return;
@@ -143,6 +146,12 @@ export function mountPet(
 			onDrop: ({ currentState, x, y }) =>
 				patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() }),
 		});
+
+		stopPetting = startPetting({
+			sprite,
+			getState: () => snapshot?.currentState ?? "IdleSit",
+			onPet: () => reactToPet(root, doc),
+		});
 	})();
 
 	return () => {
@@ -152,6 +161,7 @@ export function mountPet(
 		stopNap?.();
 		stopNight?.();
 		stopDrag?.();
+		stopPetting?.();
 		unmountBed();
 		root.remove();
 	};

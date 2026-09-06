@@ -123,3 +123,29 @@
 		transform: translateY(-3px) rotate(3deg);
 	}
 }
+
+.tabby-heart {
+	position: absolute;
+	left: 50%;
+	top: 0;
+	font-size: 14px;
+	line-height: 1;
+	color: #ff6b8b;
+	pointer-events: none;
+	will-change: transform, opacity;
+	animation: tabby-heart-float 1s ease-out var(--delay, 0ms) both;
+}
+
+@keyframes tabby-heart-float {
+	0% {
+		transform: translate(-50%, 0) scale(0.6);
+		opacity: 0;
+	}
+	20% {
+		opacity: 1;
+	}
+	100% {
+		transform: translate(calc(-50% + var(--dx, 0px)), -34px) scale(1);
+		opacity: 0;
+	}
+}
