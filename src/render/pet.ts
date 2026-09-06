@@ -69,7 +69,6 @@ export function mountPet(
 
 	const unmountBed = mountBed(doc);
 	const unmountBowl = mountBowl(storage, doc);
-	doc.body.appendChild(root);
 
 	void (async () => {
 		const saved = await storage.get<unknown>(PET_STATE_KEY);
@@ -77,6 +76,7 @@ export function mountPet(
 		const resumed = resumeSnapshot(saved, viewport(doc), Date.now());
 		snapshot = resumed;
 		render();
+		doc.body.appendChild(root);
 		if (JSON.stringify(saved) !== JSON.stringify(resumed)) {
 			await storage.set(PET_STATE_KEY, resumed);
 		}

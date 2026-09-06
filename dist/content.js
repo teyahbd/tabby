@@ -755,13 +755,13 @@
     };
     const unmountBed = mountBed(doc);
     const unmountBowl = mountBowl(storage2, doc);
-    doc.body.appendChild(root);
     void (async () => {
       const saved = await storage2.get(PET_STATE_KEY);
       if (disposed) return;
       const resumed = resumeSnapshot(saved, viewport(doc), Date.now());
       snapshot = resumed;
       render();
+      doc.body.appendChild(root);
       if (JSON.stringify(saved) !== JSON.stringify(resumed)) {
         await storage2.set(PET_STATE_KEY, resumed);
       }
