@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+
+pnpm format:check
+pnpm typecheck
+pnpm test
+pnpm build
+
+if ! git diff --quiet -- dist/; then
+	echo "pre-push: dist/ is stale — rebuild and commit it" >&2
+	exit 1
+fi
