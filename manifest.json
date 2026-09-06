@@ -1,0 +1,14 @@
+{
+	"manifest_version": 3,
+	"name": "Tabby",
+	"version": "0.0.1",
+	"description": "A small desktop pet that lives in your browser.",
+	"content_scripts": [
+		{
+			"matches": ["<all_urls>"],
+			"js": ["content.js"],
+			"css": ["pet.css"],
+			"run_at": "document_idle"
+		}
+	]
+}
