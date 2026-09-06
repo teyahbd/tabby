@@ -1,6 +1,14 @@
 import type { Storage } from "../platform/storage.ts";
 import { mountBed } from "./bed.ts";
+import { mountBowl } from "./bowl.ts";
 import { startDragInput } from "./dragInput.ts";
+import {
+	DEFAULT_HUNGER,
+	HUNGER_KEY,
+	type HungerState,
+	isHungerState,
+	startHungerLoop,
+} from "./hungerLoop.ts";
 import { startIdleLoop } from "./idleLoop.ts";
 import { startNapLoop } from "./napLoop.ts";
 import { startNightLoop } from "./nightLoop.ts";
@@ -41,6 +49,9 @@ export function mountPet(
 	let stopNight: (() => void) | null = null;
 	let stopDrag: (() => void) | null = null;
 	let stopPetting: (() => void) | null = null;
+	let stopHunger: (() => void) | null = null;
+	let unsubHunger: (() => void) | null = null;
+	let hunger: HungerState = DEFAULT_HUNGER;
 
 	const render = () => {
 		if (!snapshot) return;
@@ -57,6 +68,7 @@ export function mountPet(
 	};
 
 	const unmountBed = mountBed(doc);
+	const unmountBowl = mountBowl(storage, doc);
 	doc.body.appendChild(root);
 
 	void (async () => {
@@ -152,6 +164,40 @@ export function mountPet(
 			getState: () => snapshot?.currentState ?? "IdleSit",
 			onPet: () => reactToPet(root, doc),
 		});
+
+		const savedHunger = await storage.get<unknown>(HUNGER_KEY);
+		if (disposed) return;
+		hunger = isHungerState(savedHunger) ? savedHunger : DEFAULT_HUNGER;
+		unsubHunger = storage.subscribe<unknown>(HUNGER_KEY, (value) => {
+			hunger = isHungerState(value) ? value : DEFAULT_HUNGER;
+		});
+
+		stopHunger = startHungerLoop({
+			getState: () => snapshot?.currentState ?? "IdleSit",
+			getHunger: () => hunger,
+			getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
+			getFacing: () => snapshot?.facing ?? "left",
+			getViewport: () => viewport(doc),
+			onEatStart: ({ facing }) =>
+				patchSnapshot({
+					currentState: "Eating",
+					facing,
+					stateEnteredAt: Date.now(),
+				}),
+			onEatStep: ({ x, y }) => patchSnapshot({ x, y }, false),
+			onFinishEating: ({ ateAt, x, y }) => {
+				patchSnapshot({
+					currentState: "IdleSit",
+					x,
+					y,
+					stateEnteredAt: Date.now(),
+				});
+				void storage.set<HungerState>(HUNGER_KEY, {
+					bowlFilled: false,
+					lastAteAt: ateAt,
+				});
+			},
+		});
 	})();
 
 	return () => {
@@ -162,7 +208,10 @@ export function mountPet(
 		stopNight?.();
 		stopDrag?.();
 		stopPetting?.();
+		stopHunger?.();
+		unsubHunger?.();
 		unmountBed();
+		unmountBowl();
 		root.remove();
 	};
 }

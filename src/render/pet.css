@@ -30,6 +30,30 @@
 	white-space: nowrap;
 }
 
+#tabby-bowl {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 28px;
+	height: 28px;
+	z-index: 2147483646;
+	pointer-events: auto;
+	cursor: pointer;
+	will-change: transform;
+	border-radius: 0 0 14px 14px / 0 0 20px 20px;
+	background: #9fb0bd;
+	box-shadow:
+		inset 0 3px 0 rgba(255, 255, 255, 0.12),
+		inset 0 -6px 0 rgba(0, 0, 0, 0.16),
+		0 2px 5px rgba(0, 0, 0, 0.22);
+}
+
+#tabby-bowl[data-filled="true"] {
+	background:
+		radial-gradient(circle at 50% 40%, #8a5a2c 0, #8a5a2c 8px, transparent 9px),
+		#9fb0bd;
+}
+
 #tabby-root {
 	position: fixed;
 	top: 0;
@@ -112,6 +136,20 @@
 	border-radius: 24px / 14px;
 	transform: translateY(20px) scaleY(0.4);
 	animation: tabby-breathe 4s ease-in-out infinite;
+}
+
+#tabby-root[data-state="Eating"] #tabby-sprite {
+	animation: tabby-nibble 0.5s ease-in-out infinite;
+}
+
+@keyframes tabby-nibble {
+	0%,
+	100% {
+		transform: translateY(0) rotate(0deg);
+	}
+	50% {
+		transform: translateY(4px) rotate(1deg);
+	}
 }
 
 @keyframes tabby-waddle {

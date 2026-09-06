@@ -1,0 +1,198 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import {
+	DEFAULT_HUNGER,
+	HUNGER_COOLDOWN_MS,
+	type HungerState,
+	isHungerState,
+	isHungry,
+	startHungerLoop,
+} from "./hungerLoop.ts";
+import { bowlFeedSpot } from "./layout.ts";
+import type { Facing, PetState } from "./petState.ts";
+
+test("isHungry is true with no prior meal and after the cooldown", () => {
+	assert.equal(isHungry(null, 0), true);
+	assert.equal(isHungry(1_000, 1_000 + HUNGER_COOLDOWN_MS - 1), false);
+	assert.equal(isHungry(1_000, 1_000 + HUNGER_COOLDOWN_MS), true);
+});
+
+test("isHungerState rejects malformed values", () => {
+	assert.equal(isHungerState({ bowlFilled: true, lastAteAt: null }), true);
+	assert.equal(isHungerState({ bowlFilled: true, lastAteAt: 5 }), true);
+	assert.equal(isHungerState({ bowlFilled: "yes" }), false);
+	assert.equal(isHungerState(null), false);
+});
+
+function harness() {
+	let timerId = 0;
+	let pendingTimer: (() => void) | null = null;
+	let rafId = 0;
+	let pendingFrame: ((t: number) => void) | null = null;
+	let clock = 0;
+
+	return {
+		setTimer(fn: () => void) {
+			pendingTimer = fn;
+			return ++timerId;
+		},
+		clearTimer() {
+			pendingTimer = null;
+		},
+		raf(fn: (t: number) => void) {
+			pendingFrame = fn;
+			return ++rafId;
+		},
+		cancelRaf() {
+			pendingFrame = null;
+		},
+		now: () => clock,
+		fireTimer() {
+			const fn = pendingTimer;
+			pendingTimer = null;
+			fn?.();
+		},
+		advance(ms: number) {
+			clock += ms;
+			const fn = pendingFrame;
+			pendingFrame = null;
+			fn?.(clock);
+		},
+		get hasFrame() {
+			return pendingFrame != null;
+		},
+		get hasTimer() {
+			return pendingTimer != null;
+		},
+	};
+}
+
+const viewport = { width: 1000, height: 800 };
+
+function scene(state: PetState, hunger: HungerState, pos = { x: 100, y: 100 }) {
+	const h = harness();
+	let current = state;
+	let facing: Facing = "right";
+	let position = pos;
+	let stored = hunger;
+	const events: string[] = [];
+
+	const stop = startHungerLoop({
+		getState: () => current,
+		getHunger: () => stored,
+		getPosition: () => position,
+		getFacing: () => facing,
+		getViewport: () => viewport,
+		onEatStart: (next) => {
+			current = "Eating";
+			facing = next.facing;
+			events.push("start");
+		},
+		onEatStep: (next) => {
+			position = next;
+		},
+		onFinishEating: (next) => {
+			current = "IdleSit";
+			position = { x: next.x, y: next.y };
+			stored = { bowlFilled: false, lastAteAt: next.ateAt };
+			events.push("finish");
+		},
+		setTimer: h.setTimer,
+		clearTimer: h.clearTimer,
+		raf: h.raf,
+		cancelRaf: h.cancelRaf,
+		now: h.now,
+		nowMs: () => 10_000_000,
+	});
+
+	return {
+		h,
+		events,
+		stop,
+		get state() {
+			return current;
+		},
+		get position() {
+			return position;
+		},
+		get stored() {
+			return stored;
+		},
+		setState(s: PetState) {
+			current = s;
+		},
+	};
+}
+
+const filled: HungerState = { bowlFilled: true, lastAteAt: null };
+
+test("a hungry pet with a full bowl walks over, eats, and empties the bowl", () => {
+	const s = scene("IdleSit", filled);
+	assert.deepEqual(s.events, ["start"]);
+	assert.equal(s.state, "Eating");
+
+	for (let i = 0; i < 500 && s.h.hasFrame; i++) s.h.advance(50);
+	assert.deepEqual(s.events, ["start"]);
+
+	s.h.fireTimer();
+	assert.deepEqual(s.events, ["start", "finish"]);
+	assert.equal(s.state, "IdleSit");
+	assert.deepEqual(s.position, bowlFeedSpot(viewport));
+	assert.deepEqual(s.stored, { bowlFilled: false, lastAteAt: 10_000_000 });
+	assert.ok(s.h.hasTimer);
+});
+
+test("an empty bowl leaves the pet alone", () => {
+	const s = scene("IdleSit", DEFAULT_HUNGER);
+	assert.deepEqual(s.events, []);
+	assert.ok(s.h.hasTimer);
+	s.h.fireTimer();
+	assert.deepEqual(s.events, []);
+});
+
+test("a full bowl during the cooldown window is ignored", () => {
+	const s = scene("IdleSit", { bowlFilled: true, lastAteAt: 10_000_000 - 1 });
+	assert.deepEqual(s.events, []);
+	assert.ok(s.h.hasTimer);
+});
+
+test("a wandering pet is redirected to the bowl", () => {
+	const s = scene("Walking", filled);
+	assert.deepEqual(s.events, ["start"]);
+	assert.equal(s.state, "Eating");
+});
+
+test("napping and sleeping pets are not disturbed", () => {
+	for (const state of ["Napping", "Sleeping", "Dragged"] as PetState[]) {
+		const s = scene(state, filled);
+		assert.deepEqual(s.events, []);
+		assert.ok(s.h.hasTimer);
+	}
+});
+
+test("the walk to the bowl bails if the pet is grabbed", () => {
+	const s = scene("IdleLie", filled);
+	s.h.advance(50);
+	assert.ok(s.h.hasFrame);
+	s.setState("Dragged");
+	s.h.advance(50);
+	assert.equal(s.h.hasFrame, false);
+	assert.ok(s.h.hasTimer);
+	assert.deepEqual(s.events, ["start"]);
+});
+
+test("the bowl stays full until the pet actually finishes eating", () => {
+	const s = scene("IdleSit", filled);
+	for (let i = 0; i < 500 && s.h.hasFrame; i++) s.h.advance(50);
+	assert.equal(s.stored.bowlFilled, true);
+	s.h.fireTimer();
+	assert.equal(s.stored.bowlFilled, false);
+});
+
+test("stopping the hunger loop cancels pending work", () => {
+	const s = scene("IdleSit", filled);
+	assert.ok(s.h.hasFrame);
+	s.stop();
+	assert.equal(s.h.hasFrame, false);
+	assert.equal(s.h.hasTimer, false);
+});

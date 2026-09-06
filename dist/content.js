@@ -30,6 +30,8 @@
   var BASE_MARGIN = 24;
   var BED_WIDTH = 64;
   var BED_HEIGHT = 40;
+  var BOWL_SIZE = 28;
+  var BOWL_GAP = 14;
   function basePosition(viewport2, petSize = PET_SIZE) {
     return {
       x: Math.max(0, viewport2.width - petSize - BASE_MARGIN),
@@ -41,6 +43,20 @@
     return {
       x: base.x + (PET_SIZE - BED_WIDTH) / 2,
       y: base.y + (PET_SIZE - BED_HEIGHT)
+    };
+  }
+  function bowlPosition(viewport2) {
+    const bed = bedPosition(viewport2);
+    return {
+      x: Math.max(0, bed.x - BOWL_GAP - BOWL_SIZE),
+      y: basePosition(viewport2).y + (PET_SIZE - BOWL_SIZE)
+    };
+  }
+  function bowlFeedSpot(viewport2) {
+    const bowl = bowlPosition(viewport2);
+    return {
+      x: Math.max(0, bowl.x - (PET_SIZE - BOWL_SIZE) / 2),
+      y: basePosition(viewport2).y
     };
   }
 
@@ -70,6 +86,279 @@
     return () => {
       view?.removeEventListener("resize", position);
       bed.remove();
+    };
+  }
+
+  // src/render/idleLoop.ts
+  var IDLE_MIN_MS = 3e4;
+  var IDLE_MAX_MS = 9e4;
+  var IDLE_POSES = /* @__PURE__ */ new Set([
+    "IdleSit",
+    "IdleLie"
+  ]);
+  function isIdlePose(state) {
+    return IDLE_POSES.has(state);
+  }
+  function idleDelayMs(rng = Math.random) {
+    return IDLE_MIN_MS + Math.floor(rng() * (IDLE_MAX_MS - IDLE_MIN_MS));
+  }
+  function nextIdlePose(current, rng = Math.random) {
+    return {
+      currentState: current === "IdleSit" ? "IdleLie" : "IdleSit",
+      facing: rng() < 0.5 ? "left" : "right"
+    };
+  }
+  function startIdleLoop(deps) {
+    const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+    const clearTimer = deps.clearTimer ?? ((handle2) => clearTimeout(handle2));
+    const rng = deps.rng ?? Math.random;
+    let handle = null;
+    const arm = () => {
+      handle = setTimer(() => {
+        if (isIdlePose(deps.getState())) {
+          deps.onFlip(nextIdlePose(deps.getState(), rng));
+        }
+        arm();
+      }, idleDelayMs(rng));
+    };
+    arm();
+    return () => {
+      if (handle != null) clearTimer(handle);
+      handle = null;
+    };
+  }
+
+  // src/render/walkLoop.ts
+  var WANDER_MIN_MS = 3e3;
+  var WANDER_MAX_MS = 6e3;
+  var WALK_SPEED_PX_PER_S = 90;
+  var WANDER_MARGIN = 24;
+  function wanderDelayMs(rng = Math.random) {
+    return WANDER_MIN_MS + Math.floor(rng() * (WANDER_MAX_MS - WANDER_MIN_MS));
+  }
+  function pickDestination(viewport2, rng = Math.random, petSize = PET_SIZE) {
+    const spanX = Math.max(0, viewport2.width - petSize - 2 * WANDER_MARGIN);
+    const spanY = Math.max(0, viewport2.height - petSize - 2 * WANDER_MARGIN);
+    return {
+      x: WANDER_MARGIN + Math.round(rng() * spanX),
+      y: WANDER_MARGIN + Math.round(rng() * spanY)
+    };
+  }
+  function walkStep(from, to, dtMs, speed = WALK_SPEED_PX_PER_S) {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dist = Math.hypot(dx, dy);
+    const travel = speed * Math.max(0, dtMs) / 1e3;
+    if (dist === 0 || travel >= dist) return { x: to.x, y: to.y, arrived: true };
+    return {
+      x: from.x + dx / dist * travel,
+      y: from.y + dy / dist * travel,
+      arrived: false
+    };
+  }
+  function facingFor(fromX, toX, current) {
+    if (toX < fromX) return "left";
+    if (toX > fromX) return "right";
+    return current;
+  }
+  function arrivalPose(rng = Math.random) {
+    return rng() < 0.5 ? "IdleSit" : "IdleLie";
+  }
+  function startWalkLoop(deps) {
+    const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+    const clearTimer = deps.clearTimer ?? ((handle) => clearTimeout(handle));
+    const raf = deps.raf ?? ((fn) => requestAnimationFrame(fn));
+    const cancelRaf = deps.cancelRaf ?? ((handle) => cancelAnimationFrame(handle));
+    const now = deps.now ?? (() => performance.now());
+    const rng = deps.rng ?? Math.random;
+    let timerHandle = null;
+    let rafHandle = null;
+    const arm = () => {
+      timerHandle = setTimer(depart, wanderDelayMs(rng));
+    };
+    const depart = () => {
+      timerHandle = null;
+      if (!isIdlePose(deps.getState())) {
+        arm();
+        return;
+      }
+      const start = deps.getPosition();
+      const dest = pickDestination(deps.getViewport(), rng);
+      deps.onDepart({ facing: facingFor(start.x, dest.x, deps.getFacing()) });
+      let last = now();
+      const frame = (t) => {
+        if (deps.getState() !== "Walking") {
+          rafHandle = null;
+          arm();
+          return;
+        }
+        const step = walkStep(deps.getPosition(), dest, t - last);
+        last = t;
+        if (step.arrived) {
+          rafHandle = null;
+          deps.onArrive({
+            currentState: arrivalPose(rng),
+            x: dest.x,
+            y: dest.y
+          });
+          arm();
+          return;
+        }
+        deps.onStep({ x: step.x, y: step.y });
+        rafHandle = raf(frame);
+      };
+      rafHandle = raf(frame);
+    };
+    arm();
+    return () => {
+      if (timerHandle != null) clearTimer(timerHandle);
+      if (rafHandle != null) cancelRaf(rafHandle);
+      timerHandle = null;
+      rafHandle = null;
+    };
+  }
+
+  // src/render/hungerLoop.ts
+  var HUNGER_KEY = "hungerState";
+  var HUNGER_COOLDOWN_MS = 3 * 60 * 60 * 1e3;
+  var HUNGER_CHECK_MS = 5e3;
+  var EAT_DURATION_MS = 6e4;
+  var DEFAULT_HUNGER = {
+    bowlFilled: false,
+    lastAteAt: null
+  };
+  var EAT_START_STATES = /* @__PURE__ */ new Set([
+    "IdleSit",
+    "IdleLie",
+    "AtBase",
+    "Walking"
+  ]);
+  function isHungerState(value) {
+    if (typeof value !== "object" || value === null) return false;
+    const v = value;
+    return typeof v.bowlFilled === "boolean" && (v.lastAteAt === null || typeof v.lastAteAt === "number");
+  }
+  function isHungry(lastAteAt, now) {
+    return lastAteAt === null || now - lastAteAt >= HUNGER_COOLDOWN_MS;
+  }
+  function startHungerLoop(deps) {
+    const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+    const clearTimer = deps.clearTimer ?? ((handle) => clearTimeout(handle));
+    const raf = deps.raf ?? ((fn) => requestAnimationFrame(fn));
+    const cancelRaf = deps.cancelRaf ?? ((handle) => cancelAnimationFrame(handle));
+    const now = deps.now ?? (() => performance.now());
+    const nowMs = deps.nowMs ?? (() => Date.now());
+    let timerHandle = null;
+    let rafHandle = null;
+    let eatHandle = null;
+    let busy = false;
+    const arm = () => {
+      timerHandle = setTimer(check, HUNGER_CHECK_MS);
+    };
+    const finish = () => {
+      eatHandle = null;
+      if (deps.getState() === "Eating") {
+        const spot = bowlFeedSpot(deps.getViewport());
+        deps.onFinishEating({ ateAt: nowMs(), x: spot.x, y: spot.y });
+      }
+      busy = false;
+      arm();
+    };
+    const startEat = () => {
+      busy = true;
+      const target = bowlFeedSpot(deps.getViewport());
+      deps.onEatStart({
+        facing: facingFor(deps.getPosition().x, target.x, deps.getFacing())
+      });
+      let last = now();
+      const frame = (t) => {
+        if (deps.getState() !== "Eating") {
+          rafHandle = null;
+          busy = false;
+          arm();
+          return;
+        }
+        const step = walkStep(deps.getPosition(), target, t - last);
+        last = t;
+        if (step.arrived) {
+          rafHandle = null;
+          eatHandle = setTimer(finish, EAT_DURATION_MS);
+          return;
+        }
+        deps.onEatStep({ x: step.x, y: step.y });
+        rafHandle = raf(frame);
+      };
+      rafHandle = raf(frame);
+    };
+    const check = () => {
+      timerHandle = null;
+      if (busy) {
+        arm();
+        return;
+      }
+      const hunger = deps.getHunger();
+      if (hunger.bowlFilled && isHungry(hunger.lastAteAt, nowMs()) && EAT_START_STATES.has(deps.getState())) {
+        startEat();
+        return;
+      }
+      arm();
+    };
+    check();
+    return () => {
+      if (timerHandle != null) clearTimer(timerHandle);
+      if (rafHandle != null) cancelRaf(rafHandle);
+      if (eatHandle != null) clearTimer(eatHandle);
+      timerHandle = null;
+      rafHandle = null;
+      eatHandle = null;
+    };
+  }
+
+  // src/render/bowl.ts
+  var BOWL_ID = "tabby-bowl";
+  function mountBowl(storage2, doc = document) {
+    if (doc.getElementById(BOWL_ID)) return () => {
+    };
+    const bowl = doc.createElement("div");
+    bowl.id = BOWL_ID;
+    bowl.setAttribute("role", "button");
+    bowl.setAttribute("aria-label", "Fill Tabby's food bowl");
+    const position = () => {
+      const { x, y } = bowlPosition({
+        width: doc.documentElement.clientWidth,
+        height: doc.documentElement.clientHeight
+      });
+      bowl.style.transform = `translate(${x}px, ${y}px)`;
+    };
+    const reflect = (hunger) => {
+      bowl.dataset.filled = String(hunger.bowlFilled);
+    };
+    const onClick = () => {
+      void (async () => {
+        const current = await storage2.get(HUNGER_KEY);
+        const hunger = isHungerState(current) ? current : DEFAULT_HUNGER;
+        if (hunger.bowlFilled) return;
+        await storage2.set(HUNGER_KEY, {
+          ...hunger,
+          bowlFilled: true
+        });
+      })();
+    };
+    position();
+    reflect(DEFAULT_HUNGER);
+    bowl.addEventListener("click", onClick);
+    doc.body.appendChild(bowl);
+    const unsubscribe = storage2.subscribe(HUNGER_KEY, (value) => {
+      reflect(isHungerState(value) ? value : DEFAULT_HUNGER);
+    });
+    void storage2.get(HUNGER_KEY).then((value) => reflect(isHungerState(value) ? value : DEFAULT_HUNGER));
+    const view = doc.defaultView;
+    view?.addEventListener("resize", position);
+    return () => {
+      unsubscribe();
+      view?.removeEventListener("resize", position);
+      bowl.removeEventListener("click", onClick);
+      bowl.remove();
     };
   }
 
@@ -166,45 +455,6 @@
     };
   }
 
-  // src/render/idleLoop.ts
-  var IDLE_MIN_MS = 3e4;
-  var IDLE_MAX_MS = 9e4;
-  var IDLE_POSES = /* @__PURE__ */ new Set([
-    "IdleSit",
-    "IdleLie"
-  ]);
-  function isIdlePose(state) {
-    return IDLE_POSES.has(state);
-  }
-  function idleDelayMs(rng = Math.random) {
-    return IDLE_MIN_MS + Math.floor(rng() * (IDLE_MAX_MS - IDLE_MIN_MS));
-  }
-  function nextIdlePose(current, rng = Math.random) {
-    return {
-      currentState: current === "IdleSit" ? "IdleLie" : "IdleSit",
-      facing: rng() < 0.5 ? "left" : "right"
-    };
-  }
-  function startIdleLoop(deps) {
-    const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
-    const clearTimer = deps.clearTimer ?? ((handle2) => clearTimeout(handle2));
-    const rng = deps.rng ?? Math.random;
-    let handle = null;
-    const arm = () => {
-      handle = setTimer(() => {
-        if (isIdlePose(deps.getState())) {
-          deps.onFlip(nextIdlePose(deps.getState(), rng));
-        }
-        arm();
-      }, idleDelayMs(rng));
-    };
-    arm();
-    return () => {
-      if (handle != null) clearTimer(handle);
-      handle = null;
-    };
-  }
-
   // src/render/napLoop.ts
   var NAP_CHECK_MIN_MS = 6e4;
   var NAP_CHECK_MAX_MS = 12e4;
@@ -256,96 +506,6 @@
     return () => {
       if (handle != null) clearTimer(handle);
       handle = null;
-    };
-  }
-
-  // src/render/walkLoop.ts
-  var WANDER_MIN_MS = 3e3;
-  var WANDER_MAX_MS = 6e3;
-  var WALK_SPEED_PX_PER_S = 90;
-  var WANDER_MARGIN = 24;
-  function wanderDelayMs(rng = Math.random) {
-    return WANDER_MIN_MS + Math.floor(rng() * (WANDER_MAX_MS - WANDER_MIN_MS));
-  }
-  function pickDestination(viewport2, rng = Math.random, petSize = PET_SIZE) {
-    const spanX = Math.max(0, viewport2.width - petSize - 2 * WANDER_MARGIN);
-    const spanY = Math.max(0, viewport2.height - petSize - 2 * WANDER_MARGIN);
-    return {
-      x: WANDER_MARGIN + Math.round(rng() * spanX),
-      y: WANDER_MARGIN + Math.round(rng() * spanY)
-    };
-  }
-  function walkStep(from, to, dtMs, speed = WALK_SPEED_PX_PER_S) {
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const dist = Math.hypot(dx, dy);
-    const travel = speed * Math.max(0, dtMs) / 1e3;
-    if (dist === 0 || travel >= dist) return { x: to.x, y: to.y, arrived: true };
-    return {
-      x: from.x + dx / dist * travel,
-      y: from.y + dy / dist * travel,
-      arrived: false
-    };
-  }
-  function facingFor(fromX, toX, current) {
-    if (toX < fromX) return "left";
-    if (toX > fromX) return "right";
-    return current;
-  }
-  function arrivalPose(rng = Math.random) {
-    return rng() < 0.5 ? "IdleSit" : "IdleLie";
-  }
-  function startWalkLoop(deps) {
-    const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
-    const clearTimer = deps.clearTimer ?? ((handle) => clearTimeout(handle));
-    const raf = deps.raf ?? ((fn) => requestAnimationFrame(fn));
-    const cancelRaf = deps.cancelRaf ?? ((handle) => cancelAnimationFrame(handle));
-    const now = deps.now ?? (() => performance.now());
-    const rng = deps.rng ?? Math.random;
-    let timerHandle = null;
-    let rafHandle = null;
-    const arm = () => {
-      timerHandle = setTimer(depart, wanderDelayMs(rng));
-    };
-    const depart = () => {
-      timerHandle = null;
-      if (!isIdlePose(deps.getState())) {
-        arm();
-        return;
-      }
-      const start = deps.getPosition();
-      const dest = pickDestination(deps.getViewport(), rng);
-      deps.onDepart({ facing: facingFor(start.x, dest.x, deps.getFacing()) });
-      let last = now();
-      const frame = (t) => {
-        if (deps.getState() !== "Walking") {
-          rafHandle = null;
-          arm();
-          return;
-        }
-        const step = walkStep(deps.getPosition(), dest, t - last);
-        last = t;
-        if (step.arrived) {
-          rafHandle = null;
-          deps.onArrive({
-            currentState: arrivalPose(rng),
-            x: dest.x,
-            y: dest.y
-          });
-          arm();
-          return;
-        }
-        deps.onStep({ x: step.x, y: step.y });
-        rafHandle = raf(frame);
-      };
-      rafHandle = raf(frame);
-    };
-    arm();
-    return () => {
-      if (timerHandle != null) clearTimer(timerHandle);
-      if (rafHandle != null) cancelRaf(rafHandle);
-      timerHandle = null;
-      rafHandle = null;
     };
   }
 
@@ -568,6 +728,9 @@
     let stopNight = null;
     let stopDrag = null;
     let stopPetting = null;
+    let stopHunger = null;
+    let unsubHunger = null;
+    let hunger = DEFAULT_HUNGER;
     const render = () => {
       if (!snapshot) return;
       root.style.transform = `translate(${snapshot.x}px, ${snapshot.y}px)`;
@@ -581,6 +744,7 @@
       if (persist) void storage2.set(PET_STATE_KEY, snapshot);
     };
     const unmountBed = mountBed(doc);
+    const unmountBowl = mountBowl(storage2, doc);
     doc.body.appendChild(root);
     void (async () => {
       const saved = await storage2.get(PET_STATE_KEY);
@@ -659,6 +823,37 @@
         getState: () => snapshot?.currentState ?? "IdleSit",
         onPet: () => reactToPet(root, doc)
       });
+      const savedHunger = await storage2.get(HUNGER_KEY);
+      if (disposed) return;
+      hunger = isHungerState(savedHunger) ? savedHunger : DEFAULT_HUNGER;
+      unsubHunger = storage2.subscribe(HUNGER_KEY, (value) => {
+        hunger = isHungerState(value) ? value : DEFAULT_HUNGER;
+      });
+      stopHunger = startHungerLoop({
+        getState: () => snapshot?.currentState ?? "IdleSit",
+        getHunger: () => hunger,
+        getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
+        getFacing: () => snapshot?.facing ?? "left",
+        getViewport: () => viewport(doc),
+        onEatStart: ({ facing }) => patchSnapshot({
+          currentState: "Eating",
+          facing,
+          stateEnteredAt: Date.now()
+        }),
+        onEatStep: ({ x, y }) => patchSnapshot({ x, y }, false),
+        onFinishEating: ({ ateAt, x, y }) => {
+          patchSnapshot({
+            currentState: "IdleSit",
+            x,
+            y,
+            stateEnteredAt: Date.now()
+          });
+          void storage2.set(HUNGER_KEY, {
+            bowlFilled: false,
+            lastAteAt: ateAt
+          });
+        }
+      });
     })();
     return () => {
       disposed = true;
@@ -668,7 +863,10 @@
       stopNight?.();
       stopDrag?.();
       stopPetting?.();
+      stopHunger?.();
+      unsubHunger?.();
       unmountBed();
+      unmountBowl();
       root.remove();
     };
   }
