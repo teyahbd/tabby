@@ -28,10 +28,48 @@
   // src/render/layout.ts
   var PET_SIZE = 48;
   var BASE_MARGIN = 24;
+  var BED_WIDTH = 64;
+  var BED_HEIGHT = 40;
   function basePosition(viewport2, petSize = PET_SIZE) {
     return {
       x: Math.max(0, viewport2.width - petSize - BASE_MARGIN),
       y: Math.max(0, viewport2.height - petSize - BASE_MARGIN)
+    };
+  }
+  function bedPosition(viewport2) {
+    const base = basePosition(viewport2);
+    return {
+      x: base.x + (PET_SIZE - BED_WIDTH) / 2,
+      y: base.y + (PET_SIZE - BED_HEIGHT)
+    };
+  }
+
+  // src/render/bed.ts
+  var BED_ID = "tabby-bed";
+  var PET_NAME = "Tabby";
+  function mountBed(doc = document) {
+    if (doc.getElementById(BED_ID)) return () => {
+    };
+    const bed = doc.createElement("div");
+    bed.id = BED_ID;
+    const label = doc.createElement("div");
+    label.id = "tabby-bed-label";
+    label.textContent = PET_NAME;
+    bed.appendChild(label);
+    const position = () => {
+      const { x, y } = bedPosition({
+        width: doc.documentElement.clientWidth,
+        height: doc.documentElement.clientHeight
+      });
+      bed.style.transform = `translate(${x}px, ${y}px)`;
+    };
+    position();
+    doc.body.appendChild(bed);
+    const view = doc.defaultView;
+    view?.addEventListener("resize", position);
+    return () => {
+      view?.removeEventListener("resize", position);
+      bed.remove();
     };
   }
 
@@ -454,6 +492,7 @@
       render();
       if (persist) void storage2.set(PET_STATE_KEY, snapshot);
     };
+    const unmountBed = mountBed(doc);
     doc.body.appendChild(root);
     void (async () => {
       const saved = await storage2.get(PET_STATE_KEY);
@@ -535,6 +574,7 @@
       stopNap?.();
       stopNight?.();
       stopDrag?.();
+      unmountBed();
       root.remove();
     };
   }

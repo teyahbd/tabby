@@ -1,4 +1,5 @@
 import type { Storage } from "../platform/storage.ts";
+import { mountBed } from "./bed.ts";
 import { startDragInput } from "./dragInput.ts";
 import { startIdleLoop } from "./idleLoop.ts";
 import { startNapLoop } from "./napLoop.ts";
@@ -52,6 +53,7 @@ export function mountPet(
 		if (persist) void storage.set(PET_STATE_KEY, snapshot);
 	};
 
+	const unmountBed = mountBed(doc);
 	doc.body.appendChild(root);
 
 	void (async () => {
@@ -150,6 +152,7 @@ export function mountPet(
 		stopNap?.();
 		stopNight?.();
 		stopDrag?.();
+		unmountBed();
 		root.remove();
 	};
 }
