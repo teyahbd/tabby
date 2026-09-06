@@ -1,10 +1,10 @@
 import type { PetState } from "./petState.ts";
 
-export const NAP_CHECK_MIN_MS = 2_000;
-export const NAP_CHECK_MAX_MS = 3_000;
-export const NAP_CHANCE = 1; // always nap
-export const NAP_MIN_MS = 5_000;
-export const NAP_MAX_MS = 8_000;
+export const NAP_CHECK_MIN_MS = 60_000;
+export const NAP_CHECK_MAX_MS = 120_000;
+export const NAP_CHANCE = 0.08;
+export const NAP_MIN_MS = 5 * 60_000;
+export const NAP_MAX_MS = 10 * 60_000;
 
 export const NAP_START_STATES: ReadonlySet<PetState> = new Set<PetState>([
 	"IdleSit",

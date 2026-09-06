@@ -65,11 +65,11 @@
   }
 
   // src/render/napLoop.ts
-  var NAP_CHECK_MIN_MS = 2e3;
-  var NAP_CHECK_MAX_MS = 3e3;
-  var NAP_CHANCE = 1;
-  var NAP_MIN_MS = 5e3;
-  var NAP_MAX_MS = 8e3;
+  var NAP_CHECK_MIN_MS = 6e4;
+  var NAP_CHECK_MAX_MS = 12e4;
+  var NAP_CHANCE = 0.08;
+  var NAP_MIN_MS = 5 * 6e4;
+  var NAP_MAX_MS = 10 * 6e4;
   var NAP_START_STATES = /* @__PURE__ */ new Set([
     "IdleSit",
     "IdleLie",
