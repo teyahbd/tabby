@@ -64,6 +64,60 @@
     };
   }
 
+  // src/render/napLoop.ts
+  var NAP_CHECK_MIN_MS = 2e3;
+  var NAP_CHECK_MAX_MS = 3e3;
+  var NAP_CHANCE = 1;
+  var NAP_MIN_MS = 5e3;
+  var NAP_MAX_MS = 8e3;
+  var NAP_START_STATES = /* @__PURE__ */ new Set([
+    "IdleSit",
+    "IdleLie",
+    "AtBase"
+  ]);
+  function napCheckDelayMs(rng = Math.random) {
+    return NAP_CHECK_MIN_MS + Math.floor(rng() * (NAP_CHECK_MAX_MS - NAP_CHECK_MIN_MS));
+  }
+  function napDurationMs(rng = Math.random) {
+    return NAP_MIN_MS + Math.floor(rng() * (NAP_MAX_MS - NAP_MIN_MS));
+  }
+  function isDaytime(date = /* @__PURE__ */ new Date()) {
+    const hour = date.getHours();
+    return hour >= 7 && hour < 22;
+  }
+  function shouldNap(state, daytime, rng = Math.random) {
+    return daytime && NAP_START_STATES.has(state) && rng() < NAP_CHANCE;
+  }
+  function startNapLoop(deps) {
+    const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+    const clearTimer = deps.clearTimer ?? ((handle2) => clearTimeout(handle2));
+    const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+    const rng = deps.rng ?? Math.random;
+    let handle = null;
+    const armCheck = () => {
+      handle = setTimer(check, napCheckDelayMs(rng));
+    };
+    const check = () => {
+      handle = null;
+      if (shouldNap(deps.getState(), isDaytime(now()), rng)) {
+        deps.onNap();
+        handle = setTimer(wake, napDurationMs(rng));
+        return;
+      }
+      armCheck();
+    };
+    const wake = () => {
+      handle = null;
+      if (deps.getState() === "Napping") deps.onWake();
+      armCheck();
+    };
+    armCheck();
+    return () => {
+      if (handle != null) clearTimer(handle);
+      handle = null;
+    };
+  }
+
   // src/render/layout.ts
   var PET_SIZE = 48;
   var BASE_MARGIN = 24;
@@ -214,6 +268,7 @@
     let disposed = false;
     let stopIdle = null;
     let stopWalk = null;
+    let stopNap = null;
     const render = () => {
       if (!snapshot) return;
       root.style.transform = `translate(${snapshot.x}px, ${snapshot.y}px)`;
@@ -253,11 +308,23 @@
         onStep: ({ x, y }) => patchSnapshot({ x, y }, false),
         onArrive: ({ currentState, x, y }) => patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() })
       });
+      stopNap = startNapLoop({
+        getState: () => snapshot?.currentState ?? "IdleSit",
+        onNap: () => patchSnapshot({
+          currentState: "Napping",
+          stateEnteredAt: Date.now()
+        }),
+        onWake: () => patchSnapshot({
+          currentState: "IdleSit",
+          stateEnteredAt: Date.now()
+        })
+      });
     })();
     return () => {
       disposed = true;
       stopIdle?.();
       stopWalk?.();
+      stopNap?.();
       root.remove();
     };
   }

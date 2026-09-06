@@ -1,5 +1,6 @@
 import type { Storage } from "../platform/storage.ts";
 import { startIdleLoop } from "./idleLoop.ts";
+import { startNapLoop } from "./napLoop.ts";
 import { PET_STATE_KEY, resumeSnapshot, type PetSnapshot } from "./petState.ts";
 import { startWalkLoop } from "./walkLoop.ts";
 
@@ -31,6 +32,7 @@ export function mountPet(
 	let disposed = false;
 	let stopIdle: (() => void) | null = null;
 	let stopWalk: (() => void) | null = null;
+	let stopNap: (() => void) | null = null;
 
 	const render = () => {
 		if (!snapshot) return;
@@ -79,12 +81,27 @@ export function mountPet(
 			onArrive: ({ currentState, x, y }) =>
 				patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() }),
 		});
+
+		stopNap = startNapLoop({
+			getState: () => snapshot?.currentState ?? "IdleSit",
+			onNap: () =>
+				patchSnapshot({
+					currentState: "Napping",
+					stateEnteredAt: Date.now(),
+				}),
+			onWake: () =>
+				patchSnapshot({
+					currentState: "IdleSit",
+					stateEnteredAt: Date.now(),
+				}),
+		});
 	})();
 
 	return () => {
 		disposed = true;
 		stopIdle?.();
 		stopWalk?.();
+		stopNap?.();
 		root.remove();
 	};
 }
