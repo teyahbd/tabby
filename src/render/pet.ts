@@ -1,6 +1,7 @@
 import type { Storage } from "../platform/storage.ts";
 import { startIdleLoop } from "./idleLoop.ts";
 import { PET_STATE_KEY, resumeSnapshot, type PetSnapshot } from "./petState.ts";
+import { startWalkLoop } from "./walkLoop.ts";
 
 const ROOT_ID = "tabby-root";
 
@@ -29,12 +30,20 @@ export function mountPet(
 	let snapshot: PetSnapshot | null = null;
 	let disposed = false;
 	let stopIdle: (() => void) | null = null;
+	let stopWalk: (() => void) | null = null;
 
 	const render = () => {
 		if (!snapshot) return;
 		root.style.transform = `translate(${snapshot.x}px, ${snapshot.y}px)`;
 		root.dataset.state = snapshot.currentState;
 		root.dataset.facing = snapshot.facing;
+	};
+
+	const patchSnapshot = (patch: Partial<PetSnapshot>, persist = true) => {
+		if (!snapshot) return;
+		snapshot = { ...snapshot, ...patch };
+		render();
+		if (persist) void storage.set(PET_STATE_KEY, snapshot);
 	};
 
 	doc.body.appendChild(root);
@@ -51,23 +60,31 @@ export function mountPet(
 
 		stopIdle = startIdleLoop({
 			getState: () => snapshot?.currentState ?? "IdleSit",
-			onFlip: ({ currentState, facing }) => {
-				if (!snapshot) return;
-				snapshot = {
-					...snapshot,
-					currentState,
+			onFlip: ({ currentState, facing }) =>
+				patchSnapshot({ currentState, facing, stateEnteredAt: Date.now() }),
+		});
+
+		stopWalk = startWalkLoop({
+			getState: () => snapshot?.currentState ?? "IdleSit",
+			getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
+			getFacing: () => snapshot?.facing ?? "left",
+			getViewport: () => viewport(doc),
+			onDepart: ({ facing }) =>
+				patchSnapshot({
+					currentState: "Walking",
 					facing,
 					stateEnteredAt: Date.now(),
-				};
-				render();
-				void storage.set(PET_STATE_KEY, snapshot);
-			},
+				}),
+			onStep: ({ x, y }) => patchSnapshot({ x, y }, false),
+			onArrive: ({ currentState, x, y }) =>
+				patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() }),
 		});
 	})();
 
 	return () => {
 		disposed = true;
 		stopIdle?.();
+		stopWalk?.();
 		root.remove();
 	};
 }

@@ -107,6 +107,91 @@
     return { ...saved, currentState: "IdleSit", stateEnteredAt: now };
   }
 
+  // src/render/walkLoop.ts
+  var WANDER_MIN_MS = 3e3;
+  var WANDER_MAX_MS = 6e3;
+  var WALK_SPEED_PX_PER_S = 90;
+  var WANDER_MARGIN = 24;
+  function wanderDelayMs(rng = Math.random) {
+    return WANDER_MIN_MS + Math.floor(rng() * (WANDER_MAX_MS - WANDER_MIN_MS));
+  }
+  function pickDestination(viewport2, rng = Math.random, petSize = PET_SIZE) {
+    const spanX = Math.max(0, viewport2.width - petSize - 2 * WANDER_MARGIN);
+    const spanY = Math.max(0, viewport2.height - petSize - 2 * WANDER_MARGIN);
+    return {
+      x: WANDER_MARGIN + Math.round(rng() * spanX),
+      y: WANDER_MARGIN + Math.round(rng() * spanY)
+    };
+  }
+  function walkStep(from, to, dtMs, speed = WALK_SPEED_PX_PER_S) {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dist = Math.hypot(dx, dy);
+    const travel = speed * Math.max(0, dtMs) / 1e3;
+    if (dist === 0 || travel >= dist) return { x: to.x, y: to.y, arrived: true };
+    return {
+      x: from.x + dx / dist * travel,
+      y: from.y + dy / dist * travel,
+      arrived: false
+    };
+  }
+  function facingFor(fromX, toX, current) {
+    if (toX < fromX) return "left";
+    if (toX > fromX) return "right";
+    return current;
+  }
+  function arrivalPose(rng = Math.random) {
+    return rng() < 0.5 ? "IdleSit" : "IdleLie";
+  }
+  function startWalkLoop(deps) {
+    const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+    const clearTimer = deps.clearTimer ?? ((handle) => clearTimeout(handle));
+    const raf = deps.raf ?? ((fn) => requestAnimationFrame(fn));
+    const cancelRaf = deps.cancelRaf ?? ((handle) => cancelAnimationFrame(handle));
+    const now = deps.now ?? (() => performance.now());
+    const rng = deps.rng ?? Math.random;
+    let timerHandle = null;
+    let rafHandle = null;
+    const arm = () => {
+      timerHandle = setTimer(depart, wanderDelayMs(rng));
+    };
+    const depart = () => {
+      timerHandle = null;
+      if (!isIdlePose(deps.getState())) {
+        arm();
+        return;
+      }
+      const start = deps.getPosition();
+      const dest = pickDestination(deps.getViewport(), rng);
+      deps.onDepart({ facing: facingFor(start.x, dest.x, deps.getFacing()) });
+      let last = now();
+      const frame = (t) => {
+        const step = walkStep(deps.getPosition(), dest, t - last);
+        last = t;
+        if (step.arrived) {
+          rafHandle = null;
+          deps.onArrive({
+            currentState: arrivalPose(rng),
+            x: dest.x,
+            y: dest.y
+          });
+          arm();
+          return;
+        }
+        deps.onStep({ x: step.x, y: step.y });
+        rafHandle = raf(frame);
+      };
+      rafHandle = raf(frame);
+    };
+    arm();
+    return () => {
+      if (timerHandle != null) clearTimer(timerHandle);
+      if (rafHandle != null) cancelRaf(rafHandle);
+      timerHandle = null;
+      rafHandle = null;
+    };
+  }
+
   // src/render/pet.ts
   var ROOT_ID = "tabby-root";
   function viewport(doc) {
@@ -128,11 +213,18 @@
     let snapshot = null;
     let disposed = false;
     let stopIdle = null;
+    let stopWalk = null;
     const render = () => {
       if (!snapshot) return;
       root.style.transform = `translate(${snapshot.x}px, ${snapshot.y}px)`;
       root.dataset.state = snapshot.currentState;
       root.dataset.facing = snapshot.facing;
+    };
+    const patchSnapshot = (patch, persist = true) => {
+      if (!snapshot) return;
+      snapshot = { ...snapshot, ...patch };
+      render();
+      if (persist) void storage2.set(PET_STATE_KEY, snapshot);
     };
     doc.body.appendChild(root);
     void (async () => {
@@ -146,22 +238,26 @@
       }
       stopIdle = startIdleLoop({
         getState: () => snapshot?.currentState ?? "IdleSit",
-        onFlip: ({ currentState, facing }) => {
-          if (!snapshot) return;
-          snapshot = {
-            ...snapshot,
-            currentState,
-            facing,
-            stateEnteredAt: Date.now()
-          };
-          render();
-          void storage2.set(PET_STATE_KEY, snapshot);
-        }
+        onFlip: ({ currentState, facing }) => patchSnapshot({ currentState, facing, stateEnteredAt: Date.now() })
+      });
+      stopWalk = startWalkLoop({
+        getState: () => snapshot?.currentState ?? "IdleSit",
+        getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
+        getFacing: () => snapshot?.facing ?? "left",
+        getViewport: () => viewport(doc),
+        onDepart: ({ facing }) => patchSnapshot({
+          currentState: "Walking",
+          facing,
+          stateEnteredAt: Date.now()
+        }),
+        onStep: ({ x, y }) => patchSnapshot({ x, y }, false),
+        onArrive: ({ currentState, x, y }) => patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() })
       });
     })();
     return () => {
       disposed = true;
       stopIdle?.();
+      stopWalk?.();
       root.remove();
     };
   }
