@@ -1,4 +1,5 @@
 import type { Storage } from "../platform/storage.ts";
+import { startDragInput } from "./dragInput.ts";
 import { startIdleLoop } from "./idleLoop.ts";
 import { startNapLoop } from "./napLoop.ts";
 import { startNightLoop } from "./nightLoop.ts";
@@ -35,6 +36,7 @@ export function mountPet(
 	let stopWalk: (() => void) | null = null;
 	let stopNap: (() => void) | null = null;
 	let stopNight: (() => void) | null = null;
+	let stopDrag: (() => void) | null = null;
 
 	const render = () => {
 		if (!snapshot) return;
@@ -123,6 +125,22 @@ export function mountPet(
 					stateEnteredAt: Date.now(),
 				}),
 		});
+
+		stopDrag = startDragInput({
+			sprite,
+			moveTarget: doc,
+			getState: () => snapshot?.currentState ?? "IdleSit",
+			getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
+			getViewport: () => viewport(doc),
+			onGrab: () =>
+				patchSnapshot({
+					currentState: "Dragged",
+					stateEnteredAt: Date.now(),
+				}),
+			onDrag: ({ x, y }) => patchSnapshot({ x, y }, false),
+			onDrop: ({ currentState, x, y }) =>
+				patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() }),
+		});
 	})();
 
 	return () => {
@@ -131,6 +149,7 @@ export function mountPet(
 		stopWalk?.();
 		stopNap?.();
 		stopNight?.();
+		stopDrag?.();
 		root.remove();
 	};
 }

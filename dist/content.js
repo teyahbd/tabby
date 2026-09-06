@@ -25,6 +25,109 @@
     };
   }
 
+  // src/render/layout.ts
+  var PET_SIZE = 48;
+  var BASE_MARGIN = 24;
+  function basePosition(viewport2, petSize = PET_SIZE) {
+    return {
+      x: Math.max(0, viewport2.width - petSize - BASE_MARGIN),
+      y: Math.max(0, viewport2.height - petSize - BASE_MARGIN)
+    };
+  }
+
+  // src/render/dragInput.ts
+  var DRAG_START_STATES = /* @__PURE__ */ new Set([
+    "IdleSit",
+    "IdleLie",
+    "Walking",
+    "Napping",
+    "ReturningToBase",
+    "AtBase"
+  ]);
+  var BED_SNAP_RADIUS = PET_SIZE * 1.5;
+  var DRAG_THRESHOLD_PX = 4;
+  function canGrab(state) {
+    return DRAG_START_STATES.has(state);
+  }
+  function clampToViewport(pos, viewport2, petSize = PET_SIZE) {
+    return {
+      x: Math.min(Math.max(0, pos.x), Math.max(0, viewport2.width - petSize)),
+      y: Math.min(Math.max(0, pos.y), Math.max(0, viewport2.height - petSize))
+    };
+  }
+  function dropState(pos, viewport2, radius = BED_SNAP_RADIUS) {
+    const base = basePosition(viewport2);
+    return Math.hypot(pos.x - base.x, pos.y - base.y) <= radius ? "AtBase" : "IdleSit";
+  }
+  function startDragInput(deps) {
+    const moveTarget = deps.moveTarget ?? deps.sprite;
+    let pointerStart = null;
+    let petStart = { x: 0, y: 0 };
+    let grabbed = false;
+    const currentPos = (event) => {
+      const viewport2 = deps.getViewport();
+      return clampToViewport(
+        {
+          x: petStart.x + (event.clientX - (pointerStart?.x ?? 0)),
+          y: petStart.y + (event.clientY - (pointerStart?.y ?? 0))
+        },
+        viewport2
+      );
+    };
+    const onMove = (event) => {
+      const e = event;
+      if (!pointerStart) return;
+      if (!grabbed) {
+        const moved = Math.hypot(
+          e.clientX - pointerStart.x,
+          e.clientY - pointerStart.y
+        );
+        if (moved <= DRAG_THRESHOLD_PX) return;
+        grabbed = true;
+        deps.onGrab();
+      }
+      deps.onDrag(currentPos(e));
+    };
+    const onUp = (event) => {
+      const e = event;
+      if (!pointerStart) return;
+      const wasGrabbed = grabbed;
+      const pos = currentPos(e);
+      pointerStart = null;
+      grabbed = false;
+      moveTarget.removeEventListener("pointermove", onMove);
+      moveTarget.removeEventListener("pointerup", onUp);
+      moveTarget.removeEventListener("pointercancel", onUp);
+      if (!wasGrabbed) return;
+      deps.onDrop({
+        currentState: dropState(pos, deps.getViewport()),
+        x: pos.x,
+        y: pos.y
+      });
+    };
+    const onDown = (event) => {
+      const e = event;
+      if (e.isPrimary === false || e.button > 0) return;
+      if (pointerStart || !canGrab(deps.getState())) return;
+      e.preventDefault?.();
+      pointerStart = { x: e.clientX, y: e.clientY };
+      petStart = deps.getPosition();
+      grabbed = false;
+      moveTarget.addEventListener("pointermove", onMove);
+      moveTarget.addEventListener("pointerup", onUp);
+      moveTarget.addEventListener("pointercancel", onUp);
+    };
+    deps.sprite.addEventListener("pointerdown", onDown);
+    return () => {
+      deps.sprite.removeEventListener("pointerdown", onDown);
+      moveTarget.removeEventListener("pointermove", onMove);
+      moveTarget.removeEventListener("pointerup", onUp);
+      moveTarget.removeEventListener("pointercancel", onUp);
+      pointerStart = null;
+      grabbed = false;
+    };
+  }
+
   // src/render/idleLoop.ts
   var IDLE_MIN_MS = 3e4;
   var IDLE_MAX_MS = 9e4;
@@ -115,16 +218,6 @@
     return () => {
       if (handle != null) clearTimer(handle);
       handle = null;
-    };
-  }
-
-  // src/render/layout.ts
-  var PET_SIZE = 48;
-  var BASE_MARGIN = 24;
-  function basePosition(viewport2, petSize = PET_SIZE) {
-    return {
-      x: Math.max(0, viewport2.width - petSize - BASE_MARGIN),
-      y: Math.max(0, viewport2.height - petSize - BASE_MARGIN)
     };
   }
 
@@ -348,6 +441,7 @@
     let stopWalk = null;
     let stopNap = null;
     let stopNight = null;
+    let stopDrag = null;
     const render = () => {
       if (!snapshot) return;
       root.style.transform = `translate(${snapshot.x}px, ${snapshot.y}px)`;
@@ -420,6 +514,19 @@
           stateEnteredAt: Date.now()
         })
       });
+      stopDrag = startDragInput({
+        sprite,
+        moveTarget: doc,
+        getState: () => snapshot?.currentState ?? "IdleSit",
+        getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
+        getViewport: () => viewport(doc),
+        onGrab: () => patchSnapshot({
+          currentState: "Dragged",
+          stateEnteredAt: Date.now()
+        }),
+        onDrag: ({ x, y }) => patchSnapshot({ x, y }, false),
+        onDrop: ({ currentState, x, y }) => patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() })
+      });
     })();
     return () => {
       disposed = true;
@@ -427,6 +534,7 @@
       stopWalk?.();
       stopNap?.();
       stopNight?.();
+      stopDrag?.();
       root.remove();
     };
   }
