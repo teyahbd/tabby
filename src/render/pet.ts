@@ -1,6 +1,7 @@
 import type { Storage } from "../platform/storage.ts";
 import { startIdleLoop } from "./idleLoop.ts";
 import { startNapLoop } from "./napLoop.ts";
+import { startNightLoop } from "./nightLoop.ts";
 import { PET_STATE_KEY, resumeSnapshot, type PetSnapshot } from "./petState.ts";
 import { startWalkLoop } from "./walkLoop.ts";
 
@@ -33,6 +34,7 @@ export function mountPet(
 	let stopIdle: (() => void) | null = null;
 	let stopWalk: (() => void) | null = null;
 	let stopNap: (() => void) | null = null;
+	let stopNight: (() => void) | null = null;
 
 	const render = () => {
 		if (!snapshot) return;
@@ -95,6 +97,32 @@ export function mountPet(
 					stateEnteredAt: Date.now(),
 				}),
 		});
+
+		stopNight = startNightLoop({
+			getState: () => snapshot?.currentState ?? "IdleSit",
+			getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
+			getFacing: () => snapshot?.facing ?? "left",
+			getViewport: () => viewport(doc),
+			onReturnDepart: ({ facing }) =>
+				patchSnapshot({
+					currentState: "ReturningToBase",
+					facing,
+					stateEnteredAt: Date.now(),
+				}),
+			onReturnStep: ({ x, y }) => patchSnapshot({ x, y }, false),
+			onSleep: ({ x, y }) =>
+				patchSnapshot({
+					currentState: "Sleeping",
+					x,
+					y,
+					stateEnteredAt: Date.now(),
+				}),
+			onWake: () =>
+				patchSnapshot({
+					currentState: "IdleSit",
+					stateEnteredAt: Date.now(),
+				}),
+		});
 	})();
 
 	return () => {
@@ -102,6 +130,7 @@ export function mountPet(
 		stopIdle?.();
 		stopWalk?.();
 		stopNap?.();
+		stopNight?.();
 		root.remove();
 	};
 }

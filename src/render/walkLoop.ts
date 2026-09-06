@@ -99,6 +99,11 @@ export function startWalkLoop(deps: WalkLoopDeps): () => void {
 
 		let last = now();
 		const frame = (t: number) => {
+			if (deps.getState() !== "Walking") {
+				rafHandle = null;
+				arm();
+				return;
+			}
 			const step = walkStep(deps.getPosition(), dest, t - last);
 			last = t;
 			if (step.arrived) {

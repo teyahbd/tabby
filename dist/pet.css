@@ -62,8 +62,15 @@
 	}
 }
 
-#tabby-root[data-state="Walking"] #tabby-sprite {
+#tabby-root[data-state="Walking"] #tabby-sprite,
+#tabby-root[data-state="ReturningToBase"] #tabby-sprite {
 	animation: tabby-waddle 0.4s ease-in-out infinite;
+}
+
+#tabby-root[data-state="Sleeping"] #tabby-sprite {
+	border-radius: 24px / 14px;
+	transform: translateY(20px) scaleY(0.4);
+	animation: tabby-breathe 4s ease-in-out infinite;
 }
 
 @keyframes tabby-waddle {

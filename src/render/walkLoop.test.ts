@@ -172,6 +172,39 @@ test("startWalkLoop skips departing when the pet is not idle", () => {
 	assert.ok(h.hasTimer);
 });
 
+test("startWalkLoop abandons the walk if the state changes mid-step", () => {
+	const h = harness();
+	let state: PetState = "IdleSit";
+
+	startWalkLoop({
+		getState: () => state,
+		getPosition: () => ({ x: 0, y: 0 }),
+		getFacing: () => "left",
+		getViewport: () => ({ width: 1000, height: 800 }),
+		onDepart: () => {
+			state = "Walking";
+		},
+		onStep: () => {},
+		onArrive: () => {
+			throw new Error("should not arrive");
+		},
+		setTimer: h.setTimer,
+		clearTimer: h.clearTimer,
+		raf: h.raf,
+		cancelRaf: h.cancelRaf,
+		now: h.now,
+		rng: () => 0.5,
+	});
+
+	h.fireTimer();
+	assert.ok(h.hasFrame);
+	state = "ReturningToBase";
+	h.advance(100);
+
+	assert.equal(h.hasFrame, false);
+	assert.ok(h.hasTimer);
+});
+
 test("stopping the walk loop cancels pending work", () => {
 	const h = harness();
 	const stop = startWalkLoop({

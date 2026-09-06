@@ -128,39 +128,6 @@
     };
   }
 
-  // src/render/petState.ts
-  var PET_STATE_KEY = "petState";
-  var STABLE_STATES = /* @__PURE__ */ new Set([
-    "IdleSit",
-    "IdleLie",
-    "Napping",
-    "AtBase",
-    "Sleeping"
-  ]);
-  function isStable(state) {
-    return STABLE_STATES.has(state);
-  }
-  function initialSnapshot(viewport2, now = Date.now()) {
-    const pos = basePosition(viewport2);
-    return {
-      x: pos.x,
-      y: pos.y,
-      facing: "left",
-      currentState: "IdleSit",
-      stateEnteredAt: now
-    };
-  }
-  function isPetSnapshot(value) {
-    if (typeof value !== "object" || value === null) return false;
-    const v = value;
-    return typeof v.x === "number" && typeof v.y === "number" && (v.facing === "left" || v.facing === "right") && typeof v.currentState === "string" && typeof v.stateEnteredAt === "number";
-  }
-  function resumeSnapshot(saved, viewport2, now = Date.now()) {
-    if (!isPetSnapshot(saved)) return initialSnapshot(viewport2, now);
-    if (isStable(saved.currentState)) return saved;
-    return { ...saved, currentState: "IdleSit", stateEnteredAt: now };
-  }
-
   // src/render/walkLoop.ts
   var WANDER_MIN_MS = 3e3;
   var WANDER_MAX_MS = 6e3;
@@ -220,6 +187,11 @@
       deps.onDepart({ facing: facingFor(start.x, dest.x, deps.getFacing()) });
       let last = now();
       const frame = (t) => {
+        if (deps.getState() !== "Walking") {
+          rafHandle = null;
+          arm();
+          return;
+        }
         const step = walkStep(deps.getPosition(), dest, t - last);
         last = t;
         if (step.arrived) {
@@ -246,6 +218,112 @@
     };
   }
 
+  // src/render/nightLoop.ts
+  var NIGHT_CHECK_MS = 3e4;
+  var RETURN_START_STATES = /* @__PURE__ */ new Set([
+    "IdleSit",
+    "IdleLie",
+    "Walking",
+    "Napping"
+  ]);
+  function isNight(date = /* @__PURE__ */ new Date()) {
+    return !isDaytime(date);
+  }
+  function startNightLoop(deps) {
+    const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+    const clearTimer = deps.clearTimer ?? ((handle) => clearTimeout(handle));
+    const raf = deps.raf ?? ((fn) => requestAnimationFrame(fn));
+    const cancelRaf = deps.cancelRaf ?? ((handle) => cancelAnimationFrame(handle));
+    const now = deps.now ?? (() => performance.now());
+    const nowDate = deps.nowDate ?? (() => /* @__PURE__ */ new Date());
+    let timerHandle = null;
+    let rafHandle = null;
+    const arm = () => {
+      timerHandle = setTimer(check, NIGHT_CHECK_MS);
+    };
+    const startReturn = () => {
+      const base = basePosition(deps.getViewport());
+      deps.onReturnDepart({
+        facing: facingFor(deps.getPosition().x, base.x, deps.getFacing())
+      });
+      let last = now();
+      const frame = (t) => {
+        if (deps.getState() !== "ReturningToBase") {
+          rafHandle = null;
+          arm();
+          return;
+        }
+        const step = walkStep(deps.getPosition(), base, t - last);
+        last = t;
+        if (step.arrived) {
+          rafHandle = null;
+          deps.onSleep({ x: base.x, y: base.y });
+          arm();
+          return;
+        }
+        deps.onReturnStep({ x: step.x, y: step.y });
+        rafHandle = raf(frame);
+      };
+      rafHandle = raf(frame);
+    };
+    const check = () => {
+      timerHandle = null;
+      const state = deps.getState();
+      if (!isNight(nowDate())) {
+        if (state === "Sleeping") deps.onWake();
+        arm();
+        return;
+      }
+      if (state === "AtBase") {
+        deps.onSleep(deps.getPosition());
+      } else if (RETURN_START_STATES.has(state)) {
+        startReturn();
+        return;
+      }
+      arm();
+    };
+    check();
+    return () => {
+      if (timerHandle != null) clearTimer(timerHandle);
+      if (rafHandle != null) cancelRaf(rafHandle);
+      timerHandle = null;
+      rafHandle = null;
+    };
+  }
+
+  // src/render/petState.ts
+  var PET_STATE_KEY = "petState";
+  var STABLE_STATES = /* @__PURE__ */ new Set([
+    "IdleSit",
+    "IdleLie",
+    "Napping",
+    "AtBase",
+    "Sleeping"
+  ]);
+  function isStable(state) {
+    return STABLE_STATES.has(state);
+  }
+  function initialSnapshot(viewport2, now = Date.now()) {
+    const pos = basePosition(viewport2);
+    return {
+      x: pos.x,
+      y: pos.y,
+      facing: "left",
+      currentState: "IdleSit",
+      stateEnteredAt: now
+    };
+  }
+  function isPetSnapshot(value) {
+    if (typeof value !== "object" || value === null) return false;
+    const v = value;
+    return typeof v.x === "number" && typeof v.y === "number" && (v.facing === "left" || v.facing === "right") && typeof v.currentState === "string" && typeof v.stateEnteredAt === "number";
+  }
+  function resumeSnapshot(saved, viewport2, now = Date.now()) {
+    if (!isPetSnapshot(saved)) return initialSnapshot(viewport2, now);
+    if (isStable(saved.currentState)) return saved;
+    return { ...saved, currentState: "IdleSit", stateEnteredAt: now };
+  }
+
   // src/render/pet.ts
   var ROOT_ID = "tabby-root";
   function viewport(doc) {
@@ -269,6 +347,7 @@
     let stopIdle = null;
     let stopWalk = null;
     let stopNap = null;
+    let stopNight = null;
     const render = () => {
       if (!snapshot) return;
       root.style.transform = `translate(${snapshot.x}px, ${snapshot.y}px)`;
@@ -319,12 +398,35 @@
           stateEnteredAt: Date.now()
         })
       });
+      stopNight = startNightLoop({
+        getState: () => snapshot?.currentState ?? "IdleSit",
+        getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
+        getFacing: () => snapshot?.facing ?? "left",
+        getViewport: () => viewport(doc),
+        onReturnDepart: ({ facing }) => patchSnapshot({
+          currentState: "ReturningToBase",
+          facing,
+          stateEnteredAt: Date.now()
+        }),
+        onReturnStep: ({ x, y }) => patchSnapshot({ x, y }, false),
+        onSleep: ({ x, y }) => patchSnapshot({
+          currentState: "Sleeping",
+          x,
+          y,
+          stateEnteredAt: Date.now()
+        }),
+        onWake: () => patchSnapshot({
+          currentState: "IdleSit",
+          stateEnteredAt: Date.now()
+        })
+      });
     })();
     return () => {
       disposed = true;
       stopIdle?.();
       stopWalk?.();
       stopNap?.();
+      stopNight?.();
       root.remove();
     };
   }
