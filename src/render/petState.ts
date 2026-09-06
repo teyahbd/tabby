@@ -29,6 +29,7 @@ const STABLE_STATES: ReadonlySet<PetState> = new Set<PetState>([
 	"Napping",
 	"AtBase",
 	"Sleeping",
+	"Eating",
 ]);
 
 export function isStable(state: PetState): boolean {

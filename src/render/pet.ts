@@ -178,6 +178,7 @@ export function mountPet(
 			getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
 			getFacing: () => snapshot?.facing ?? "left",
 			getViewport: () => viewport(doc),
+			getEnteredAt: () => snapshot?.stateEnteredAt ?? Date.now(),
 			onEatStart: ({ facing }) =>
 				patchSnapshot({
 					currentState: "Eating",

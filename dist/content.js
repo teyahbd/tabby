@@ -264,12 +264,9 @@
       busy = false;
       arm();
     };
-    const startEat = () => {
+    const walkToBowlThenEat = (eatMs) => {
       busy = true;
       const target = bowlFeedSpot(deps.getViewport());
-      deps.onEatStart({
-        facing: facingFor(deps.getPosition().x, target.x, deps.getFacing())
-      });
       let last = now();
       const frame = (t) => {
         if (deps.getState() !== "Eating") {
@@ -282,13 +279,24 @@
         last = t;
         if (step.arrived) {
           rafHandle = null;
-          eatHandle = setTimer(finish, EAT_DURATION_MS);
+          eatHandle = setTimer(finish, eatMs);
           return;
         }
         deps.onEatStep({ x: step.x, y: step.y });
         rafHandle = raf(frame);
       };
       rafHandle = raf(frame);
+    };
+    const startEat = () => {
+      const target = bowlFeedSpot(deps.getViewport());
+      deps.onEatStart({
+        facing: facingFor(deps.getPosition().x, target.x, deps.getFacing())
+      });
+      walkToBowlThenEat(EAT_DURATION_MS);
+    };
+    const resumeEat = () => {
+      const remaining = EAT_DURATION_MS - (nowMs() - deps.getEnteredAt());
+      walkToBowlThenEat(Math.max(0, remaining));
     };
     const check = () => {
       timerHandle = null;
@@ -303,7 +311,8 @@
       }
       arm();
     };
-    check();
+    if (deps.getState() === "Eating") resumeEat();
+    else check();
     return () => {
       if (timerHandle != null) clearTimer(timerHandle);
       if (rafHandle != null) cancelRaf(rafHandle);
@@ -626,7 +635,8 @@
     "IdleLie",
     "Napping",
     "AtBase",
-    "Sleeping"
+    "Sleeping",
+    "Eating"
   ]);
   function isStable(state) {
     return STABLE_STATES.has(state);
@@ -835,6 +845,7 @@
         getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
         getFacing: () => snapshot?.facing ?? "left",
         getViewport: () => viewport(doc),
+        getEnteredAt: () => snapshot?.stateEnteredAt ?? Date.now(),
         onEatStart: ({ facing }) => patchSnapshot({
           currentState: "Eating",
           facing,

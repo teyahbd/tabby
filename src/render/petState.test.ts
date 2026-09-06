@@ -27,21 +27,22 @@ test("resume falls back to the initial snapshot for missing or malformed state",
 });
 
 test("stable states resume exactly as saved", () => {
-	const saved = {
-		x: 10,
-		y: 20,
-		facing: "right" as const,
-		currentState: "Napping" as const,
-		stateEnteredAt: 42,
-	};
-	assert.deepEqual(resumeSnapshot(saved, viewport, 999), saved);
+	for (const currentState of ["Napping", "Eating"] as const) {
+		const saved = {
+			x: 10,
+			y: 20,
+			facing: "right" as const,
+			currentState,
+			stateEnteredAt: 42,
+		};
+		assert.deepEqual(resumeSnapshot(saved, viewport, 999), saved);
+	}
 });
 
 test("transient states collapse to IdleSit at the saved position", () => {
 	for (const currentState of [
 		"Walking",
 		"Dragged",
-		"Eating",
 		"ReturningToBase",
 	] as const) {
 		const saved = {

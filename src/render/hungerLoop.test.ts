@@ -69,7 +69,12 @@ function harness() {
 
 const viewport = { width: 1000, height: 800 };
 
-function scene(state: PetState, hunger: HungerState, pos = { x: 100, y: 100 }) {
+function scene(
+	state: PetState,
+	hunger: HungerState,
+	pos = { x: 100, y: 100 },
+	enteredAt = 0,
+) {
 	const h = harness();
 	let current = state;
 	let facing: Facing = "right";
@@ -83,6 +88,7 @@ function scene(state: PetState, hunger: HungerState, pos = { x: 100, y: 100 }) {
 		getPosition: () => position,
 		getFacing: () => facing,
 		getViewport: () => viewport,
+		getEnteredAt: () => enteredAt,
 		onEatStart: (next) => {
 			current = "Eating";
 			facing = next.facing;
@@ -160,6 +166,31 @@ test("a wandering pet is redirected to the bowl", () => {
 	const s = scene("Walking", filled);
 	assert.deepEqual(s.events, ["start"]);
 	assert.equal(s.state, "Eating");
+});
+
+test("a resumed Eating pet finishes the meal instead of restarting it", () => {
+	const s = scene(
+		"Eating",
+		filled,
+		bowlFeedSpot(viewport),
+		10_000_000 - 20_000,
+	);
+	assert.deepEqual(s.events, []);
+	assert.equal(s.state, "Eating");
+
+	for (let i = 0; i < 500 && s.h.hasFrame; i++) s.h.advance(50);
+	s.h.fireTimer();
+
+	assert.deepEqual(s.events, ["finish"]);
+	assert.equal(s.state, "IdleSit");
+	assert.deepEqual(s.stored, { bowlFilled: false, lastAteAt: 10_000_000 });
+});
+
+test("a resumed Eating pet whose meal already elapsed finishes immediately", () => {
+	const s = scene("Eating", filled, bowlFeedSpot(viewport), 0);
+	for (let i = 0; i < 500 && s.h.hasFrame; i++) s.h.advance(50);
+	s.h.fireTimer();
+	assert.deepEqual(s.events, ["finish"]);
 });
 
 test("napping and sleeping pets are not disturbed", () => {

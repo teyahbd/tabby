@@ -44,6 +44,7 @@ export interface HungerLoopDeps {
 	getPosition: () => Point;
 	getFacing: () => Facing;
 	getViewport: () => Viewport;
+	getEnteredAt: () => number;
 	onEatStart: (next: { facing: Facing }) => void;
 	onEatStep: (pos: Point) => void;
 	onFinishEating: (next: { ateAt: number; x: number; y: number }) => void;
@@ -85,12 +86,9 @@ export function startHungerLoop(deps: HungerLoopDeps): () => void {
 		arm();
 	};
 
-	const startEat = () => {
+	const walkToBowlThenEat = (eatMs: number) => {
 		busy = true;
 		const target = bowlFeedSpot(deps.getViewport());
-		deps.onEatStart({
-			facing: facingFor(deps.getPosition().x, target.x, deps.getFacing()),
-		});
 
 		let last = now();
 		const frame = (t: number) => {
@@ -104,13 +102,26 @@ export function startHungerLoop(deps: HungerLoopDeps): () => void {
 			last = t;
 			if (step.arrived) {
 				rafHandle = null;
-				eatHandle = setTimer(finish, EAT_DURATION_MS);
+				eatHandle = setTimer(finish, eatMs);
 				return;
 			}
 			deps.onEatStep({ x: step.x, y: step.y });
 			rafHandle = raf(frame);
 		};
 		rafHandle = raf(frame);
+	};
+
+	const startEat = () => {
+		const target = bowlFeedSpot(deps.getViewport());
+		deps.onEatStart({
+			facing: facingFor(deps.getPosition().x, target.x, deps.getFacing()),
+		});
+		walkToBowlThenEat(EAT_DURATION_MS);
+	};
+
+	const resumeEat = () => {
+		const remaining = EAT_DURATION_MS - (nowMs() - deps.getEnteredAt());
+		walkToBowlThenEat(Math.max(0, remaining));
 	};
 
 	const check = () => {
@@ -131,7 +142,8 @@ export function startHungerLoop(deps: HungerLoopDeps): () => void {
 		arm();
 	};
 
-	check();
+	if (deps.getState() === "Eating") resumeEat();
+	else check();
 
 	return () => {
 		if (timerHandle != null) clearTimer(timerHandle);
