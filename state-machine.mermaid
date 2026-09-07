@@ -1,0 +1,54 @@
+stateDiagram-v2
+    [*] --> IdleSit: mount (resume saved position)
+
+    IdleSit --> IdleLie: idle timer (random)
+    IdleLie --> IdleSit: idle timer (random)
+
+    IdleSit --> Walking: wander timer fires
+    IdleLie --> Walking: wander timer fires
+    Walking --> IdleSit: reaches destination
+    Walking --> IdleLie: reaches destination (lie down instead)
+
+    IdleSit --> Napping: random chance (daytime only)
+    IdleLie --> Napping: random chance (daytime only)
+    Napping --> IdleSit: nap timer ends
+
+    IdleSit --> Eating: bowl has food + cat is free
+    IdleLie --> Eating: bowl has food + cat is free
+    Walking --> Eating: bowl has food + cat is free (redirect)
+    Eating --> IdleSit: eat animation completes
+
+    IdleSit --> Dragged: user grabs cat
+    IdleLie --> Dragged: user grabs cat
+    Walking --> Dragged: user grabs cat
+    Napping --> Dragged: user grabs cat
+    AtBase --> Dragged: user grabs cat
+    ReturningToBase --> Dragged: user grabs cat
+    Dragged --> IdleSit: dropped (anywhere)
+    Dragged --> AtBase: dropped on/near bed
+
+    AtBase --> IdleSit: wander timer fires (leaves base)
+    AtBase --> Napping: random chance (daytime)
+
+    IdleSit --> ReturningToBase: night schedule hits
+    IdleLie --> ReturningToBase: night schedule hits
+    Walking --> ReturningToBase: night schedule hits (finish current step first)
+    Napping --> ReturningToBase: night schedule hits
+    ReturningToBase --> Sleeping: arrives at base
+    AtBase --> Sleeping: night schedule hits (already home)
+
+    Sleeping --> IdleSit: morning schedule hits
+
+    note right of ReturningToBase
+        Same walk animation/logic as
+        regular Walking, just targeted
+        at base instead of a random spot
+    end note
+
+    note right of Dragged
+        Petting (click) is NOT a state — it's a
+        reaction overlay (floating hearts + purr)
+        that fires without changing the current
+        state. Suppressed only while Dragged,
+        Sleeping, Napping, or Eating.
+    end note
