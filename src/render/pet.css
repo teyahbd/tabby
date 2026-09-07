@@ -191,6 +191,55 @@
 	transform: scaleX(var(--face)) rotate(-3deg) scale(1.05);
 }
 
+#tabby-zzz {
+	position: absolute;
+	left: 68%;
+	top: 24%;
+	display: none;
+	pointer-events: none;
+}
+
+#tabby-root[data-state="Napping"] #tabby-zzz,
+#tabby-root[data-state="Sleeping"] #tabby-zzz {
+	display: block;
+}
+
+#tabby-zzz span {
+	position: absolute;
+	left: 0;
+	top: 0;
+	font-family: "Tabby Pixel", "Courier New", monospace;
+	font-weight: 700;
+	color: #cdd6f4;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+	will-change: transform, opacity;
+	animation: tabby-zzz-float 3s ease-in-out calc(var(--i) * 1s) infinite;
+}
+
+#tabby-zzz span:nth-child(1) {
+	font-size: 12px;
+}
+#tabby-zzz span:nth-child(2) {
+	font-size: 16px;
+}
+#tabby-zzz span:nth-child(3) {
+	font-size: 20px;
+}
+
+@keyframes tabby-zzz-float {
+	0% {
+		transform: translate(0, 0) rotate(-8deg);
+		opacity: 0;
+	}
+	20% {
+		opacity: 0.9;
+	}
+	100% {
+		transform: translate(20px, -40px) rotate(8deg);
+		opacity: 0;
+	}
+}
+
 .tabby-heart {
 	position: absolute;
 	left: 50%;

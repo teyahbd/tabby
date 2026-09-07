@@ -796,6 +796,16 @@
     sprite.setAttribute("role", "img");
     sprite.setAttribute("aria-label", "Tabby");
     root.appendChild(sprite);
+    const zzz = doc.createElement("div");
+    zzz.id = "tabby-zzz";
+    zzz.setAttribute("aria-hidden", "true");
+    for (let i = 0; i < 3; i++) {
+      const z = doc.createElement("span");
+      z.textContent = "z";
+      z.style.setProperty("--i", String(i));
+      zzz.appendChild(z);
+    }
+    root.appendChild(zzz);
     let snapshot = null;
     let disposed = false;
     let stopIdle = null;
