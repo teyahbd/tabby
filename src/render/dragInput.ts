@@ -1,4 +1,10 @@
-import { basePosition, PET_SIZE, type Point, type Viewport } from "./layout.ts";
+import {
+	basePosition,
+	clampPoint,
+	PET_SIZE,
+	type Point,
+	type Viewport,
+} from "./layout.ts";
 import type { PetState } from "./petState.ts";
 
 export const DRAG_START_STATES: ReadonlySet<PetState> = new Set<PetState>([
@@ -22,10 +28,7 @@ export function clampToViewport(
 	viewport: Viewport,
 	petSize = PET_SIZE,
 ): Point {
-	return {
-		x: Math.min(Math.max(0, pos.x), Math.max(0, viewport.width - petSize)),
-		y: Math.min(Math.max(0, pos.y), Math.max(0, viewport.height - petSize)),
-	};
+	return clampPoint(pos, viewport, petSize);
 }
 
 export function dropState(

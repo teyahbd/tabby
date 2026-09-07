@@ -24,6 +24,17 @@ export interface Viewport {
 	height: number;
 }
 
+export function clampPoint(
+	pos: Point,
+	viewport: Viewport,
+	petSize = PET_SIZE,
+): Point {
+	return {
+		x: Math.min(Math.max(0, pos.x), Math.max(0, viewport.width - petSize)),
+		y: Math.min(Math.max(0, pos.y), Math.max(0, viewport.height - petSize)),
+	};
+}
+
 export function basePosition(viewport: Viewport, petSize = PET_SIZE): Point {
 	return {
 		x: Math.max(0, viewport.width - petSize - BASE_MARGIN),

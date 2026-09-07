@@ -1,4 +1,10 @@
-import { basePosition, type Viewport } from "./layout.ts";
+import {
+	basePosition,
+	bowlFeedSpot,
+	clampPoint,
+	type Point,
+	type Viewport,
+} from "./layout.ts";
 
 export const PET_STATE_KEY = "petState";
 
@@ -70,4 +76,24 @@ export function resumeSnapshot(
 	if (!isPetSnapshot(saved)) return initialSnapshot(viewport, now);
 	if (isStable(saved.currentState)) return saved;
 	return { ...saved, currentState: "IdleSit", stateEnteredAt: now };
+}
+
+const RESTING_ANCHORS: Partial<
+	Record<PetState, (viewport: Viewport) => Point>
+> = {
+	AtBase: basePosition,
+	Sleeping: basePosition,
+	Eating: bowlFeedSpot,
+};
+
+export function repositionOnResize(
+	snapshot: PetSnapshot,
+	viewport: Viewport,
+): PetSnapshot {
+	const anchor = RESTING_ANCHORS[snapshot.currentState];
+	const pos = anchor
+		? anchor(viewport)
+		: clampPoint({ x: snapshot.x, y: snapshot.y }, viewport);
+	if (pos.x === snapshot.x && pos.y === snapshot.y) return snapshot;
+	return { ...snapshot, x: pos.x, y: pos.y };
 }

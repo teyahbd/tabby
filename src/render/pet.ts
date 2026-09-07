@@ -13,7 +13,12 @@ import { startIdleLoop } from "./idleLoop.ts";
 import { startNapLoop } from "./napLoop.ts";
 import { startNightLoop } from "./nightLoop.ts";
 import { startPetting } from "./petting.ts";
-import { PET_STATE_KEY, resumeSnapshot, type PetSnapshot } from "./petState.ts";
+import {
+	PET_STATE_KEY,
+	repositionOnResize,
+	resumeSnapshot,
+	type PetSnapshot,
+} from "./petState.ts";
 import { reactToPet } from "./reaction.ts";
 import { startWalkLoop } from "./walkLoop.ts";
 
@@ -66,6 +71,14 @@ export function mountPet(
 		render();
 		if (persist) void storage.set(PET_STATE_KEY, snapshot);
 	};
+
+	const onResize = () => {
+		if (!snapshot) return;
+		const next = repositionOnResize(snapshot, viewport(doc));
+		if (next !== snapshot) patchSnapshot({ x: next.x, y: next.y });
+	};
+	const view = doc.defaultView;
+	view?.addEventListener("resize", onResize);
 
 	const unmountBed = mountBed(doc);
 	const unmountBowl = mountBowl(storage, doc);
@@ -203,6 +216,7 @@ export function mountPet(
 
 	return () => {
 		disposed = true;
+		view?.removeEventListener("resize", onResize);
 		stopIdle?.();
 		stopWalk?.();
 		stopNap?.();
