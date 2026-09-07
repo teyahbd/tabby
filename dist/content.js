@@ -161,8 +161,8 @@
   }
 
   // src/render/walkLoop.ts
-  var WANDER_MIN_MS = 3e3;
-  var WANDER_MAX_MS = 6e3;
+  var WANDER_MIN_MS = 12e4;
+  var WANDER_MAX_MS = 3e5;
   var WALK_SPEED_PX_PER_S = 90;
   var WANDER_MARGIN = 24;
   function wanderDelayMs(rng = Math.random) {
