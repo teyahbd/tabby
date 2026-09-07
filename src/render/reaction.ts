@@ -1,4 +1,25 @@
-const PURR_BASE_HZ = [55, 62, 70];
+// Meow clips derived from "Black Cat Talking" by itinerantmonk108 (CC0,
+// https://freesound.org/s/725686/). See CREDITS.md.
+import meow1 from "../assets/sounds/meow_1.wav";
+import meow2 from "../assets/sounds/meow_2.wav";
+import meow3 from "../assets/sounds/meow_3.wav";
+import meow4 from "../assets/sounds/meow_4.wav";
+
+const MEOW_CLIPS = [meow1, meow2, meow3, meow4];
+const MEOW_VOLUME = 0.2;
+
+let audioContext: AudioContext | null = null;
+const decodedClips = new Map<number, AudioBuffer>();
+
+function getAudioContext(): AudioContext | null {
+	const Ctor =
+		globalThis.AudioContext ??
+		(globalThis as unknown as { webkitAudioContext?: typeof AudioContext })
+			.webkitAudioContext;
+	if (!Ctor) return null;
+	if (!audioContext) audioContext = new Ctor();
+	return audioContext;
+}
 
 export function spawnHearts(
 	container: HTMLElement,
@@ -17,46 +38,40 @@ export function spawnHearts(
 	}
 }
 
-export function playPurr(rng: () => number = Math.random): void {
-	const Ctor =
-		globalThis.AudioContext ??
-		(globalThis as unknown as { webkitAudioContext?: typeof AudioContext })
-			.webkitAudioContext;
-	if (!Ctor) return;
+export function playMeow(rng: () => number = Math.random): void {
+	const ctx = getAudioContext();
+	if (!ctx) return;
+	void ctx.resume().catch(() => {});
 
-	const ctx = new Ctor();
-	const now = ctx.currentTime;
-	const dur = 0.55;
-	const base = PURR_BASE_HZ[Math.floor(rng() * PURR_BASE_HZ.length)] ?? 60;
+	const index = Math.min(
+		MEOW_CLIPS.length - 1,
+		Math.floor(rng() * MEOW_CLIPS.length),
+	);
+	const bytes = MEOW_CLIPS[index];
+	if (!bytes) return;
 
-	const osc = ctx.createOscillator();
-	osc.type = "sawtooth";
-	osc.frequency.value = base;
+	const start = (buffer: AudioBuffer) => {
+		const source = ctx.createBufferSource();
+		source.buffer = buffer;
+		const gain = ctx.createGain();
+		gain.gain.value = MEOW_VOLUME;
+		source.connect(gain).connect(ctx.destination);
+		source.start();
+	};
 
-	const lowpass = ctx.createBiquadFilter();
-	lowpass.type = "lowpass";
-	lowpass.frequency.value = 320;
+	const cached = decodedClips.get(index);
+	if (cached) {
+		start(cached);
+		return;
+	}
 
-	const lfo = ctx.createOscillator();
-	lfo.type = "sine";
-	lfo.frequency.value = 25;
-	const lfoDepth = ctx.createGain();
-	lfoDepth.gain.value = 0.35;
-
-	const amp = ctx.createGain();
-	amp.gain.setValueAtTime(0, now);
-	amp.gain.linearRampToValueAtTime(0.5, now + 0.08);
-	amp.gain.setValueAtTime(0.5, now + dur - 0.15);
-	amp.gain.linearRampToValueAtTime(0, now + dur);
-
-	lfo.connect(lfoDepth).connect(amp.gain);
-	osc.connect(lowpass).connect(amp).connect(ctx.destination);
-
-	osc.start(now);
-	lfo.start(now);
-	osc.stop(now + dur);
-	lfo.stop(now + dur);
-	osc.onended = () => void ctx.close();
+	ctx
+		.decodeAudioData(bytes.slice().buffer)
+		.then((buffer) => {
+			decodedClips.set(index, buffer);
+			start(buffer);
+		})
+		.catch(() => {});
 }
 
 export function reactToPet(
@@ -65,7 +80,7 @@ export function reactToPet(
 	rng: () => number = Math.random,
 ): void {
 	spawnHearts(root, doc, rng);
-	playPurr(rng);
+	playMeow(rng);
 }
 
 export default reactToPet;
