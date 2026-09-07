@@ -3,3 +3,9 @@ node_modules/
 *.log
 .vscode/
 CLAUDE.md
+
+# Raw sprite art — not redistributable, see CREDITS.md
+Cat Sprites/
+
+# Baked sprite art (contains the sprite sheet) — not committed while licensing is undecided
+dist/pet.css

@@ -25,7 +25,7 @@ export function mountBowl(
 			width: doc.documentElement.clientWidth,
 			height: doc.documentElement.clientHeight,
 		});
-		bowl.style.transform = `translate(${x}px, ${y}px)`;
+		bowl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
 	};
 
 	const reflect = (hunger: HungerState) => {

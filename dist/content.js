@@ -26,11 +26,14 @@
   }
 
   // src/render/layout.ts
-  var PET_SIZE = 48;
+  var PET_SIZE = 144;
   var BASE_MARGIN = 24;
-  var BED_WIDTH = 64;
-  var BED_HEIGHT = 40;
-  var BOWL_SIZE = 28;
+  var BED_WIDTH = 192;
+  var BED_HEIGHT = 128;
+  var BED_LABEL_BOTTOM_INSET = 8;
+  var BED_LABEL_LINE_HEIGHT = 14;
+  var BOWL_WIDTH = 64;
+  var BOWL_HEIGHT = 48;
   var BOWL_GAP = 14;
   function basePosition(viewport2, petSize = PET_SIZE) {
     return {
@@ -39,29 +42,38 @@
     };
   }
   function bedPosition(viewport2) {
-    const base = basePosition(viewport2);
     return {
-      x: base.x + (PET_SIZE - BED_WIDTH) / 2,
-      y: base.y + (PET_SIZE - BED_HEIGHT)
+      x: Math.round(Math.max(0, viewport2.width - BED_WIDTH - BASE_MARGIN)),
+      y: Math.round(Math.max(0, viewport2.height - BED_HEIGHT - BASE_MARGIN))
+    };
+  }
+  function bedLabelPosition(viewport2) {
+    const bed = bedPosition(viewport2);
+    return {
+      x: bed.x,
+      y: Math.round(
+        bed.y + BED_HEIGHT - BED_LABEL_BOTTOM_INSET - BED_LABEL_LINE_HEIGHT
+      )
     };
   }
   function bowlPosition(viewport2) {
     const bed = bedPosition(viewport2);
     return {
-      x: Math.max(0, bed.x - BOWL_GAP - BOWL_SIZE),
-      y: basePosition(viewport2).y + (PET_SIZE - BOWL_SIZE)
+      x: Math.max(0, bed.x - BOWL_GAP - BOWL_WIDTH),
+      y: basePosition(viewport2).y + (PET_SIZE - BOWL_HEIGHT)
     };
   }
   function bowlFeedSpot(viewport2) {
     const bowl = bowlPosition(viewport2);
     return {
-      x: Math.max(0, bowl.x - (PET_SIZE - BOWL_SIZE) / 2),
+      x: Math.max(0, bowl.x - (PET_SIZE - BOWL_WIDTH) / 2),
       y: basePosition(viewport2).y
     };
   }
 
   // src/render/bed.ts
   var BED_ID = "tabby-bed";
+  var BED_LABEL_ID = "tabby-bed-label";
   var PET_NAME = "Tabby";
   function mountBed(doc = document) {
     if (doc.getElementById(BED_ID)) return () => {
@@ -69,23 +81,27 @@
     const bed = doc.createElement("div");
     bed.id = BED_ID;
     const label = doc.createElement("div");
-    label.id = "tabby-bed-label";
+    label.id = BED_LABEL_ID;
     label.textContent = PET_NAME;
-    bed.appendChild(label);
     const position = () => {
-      const { x, y } = bedPosition({
+      const viewport2 = {
         width: doc.documentElement.clientWidth,
         height: doc.documentElement.clientHeight
-      });
-      bed.style.transform = `translate(${x}px, ${y}px)`;
+      };
+      const pos = bedPosition(viewport2);
+      bed.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+      const labelPos = bedLabelPosition(viewport2);
+      label.style.transform = `translate(${labelPos.x}px, ${labelPos.y}px)`;
     };
     position();
     doc.body.appendChild(bed);
+    doc.body.appendChild(label);
     const view = doc.defaultView;
     view?.addEventListener("resize", position);
     return () => {
       view?.removeEventListener("resize", position);
       bed.remove();
+      label.remove();
     };
   }
 
@@ -337,7 +353,7 @@
         width: doc.documentElement.clientWidth,
         height: doc.documentElement.clientHeight
       });
-      bowl.style.transform = `translate(${x}px, ${y}px)`;
+      bowl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
     };
     const reflect = (hunger) => {
       bowl.dataset.filled = String(hunger.bowlFilled);

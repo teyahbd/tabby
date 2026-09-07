@@ -1,6 +1,7 @@
-import { bedPosition } from "./layout.ts";
+import { bedLabelPosition, bedPosition } from "./layout.ts";
 
 export const BED_ID = "tabby-bed";
+export const BED_LABEL_ID = "tabby-bed-label";
 export const PET_NAME = "Tabby";
 
 export function mountBed(doc: Document = document): () => void {
@@ -10,20 +11,23 @@ export function mountBed(doc: Document = document): () => void {
 	bed.id = BED_ID;
 
 	const label = doc.createElement("div");
-	label.id = "tabby-bed-label";
+	label.id = BED_LABEL_ID;
 	label.textContent = PET_NAME;
-	bed.appendChild(label);
 
 	const position = () => {
-		const { x, y } = bedPosition({
+		const viewport = {
 			width: doc.documentElement.clientWidth,
 			height: doc.documentElement.clientHeight,
-		});
-		bed.style.transform = `translate(${x}px, ${y}px)`;
+		};
+		const pos = bedPosition(viewport);
+		bed.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+		const labelPos = bedLabelPosition(viewport);
+		label.style.transform = `translate(${labelPos.x}px, ${labelPos.y}px)`;
 	};
 
 	position();
 	doc.body.appendChild(bed);
+	doc.body.appendChild(label);
 
 	const view = doc.defaultView;
 	view?.addEventListener("resize", position);
@@ -31,6 +35,7 @@ export function mountBed(doc: Document = document): () => void {
 	return () => {
 		view?.removeEventListener("resize", position);
 		bed.remove();
+		label.remove();
 	};
 }
 

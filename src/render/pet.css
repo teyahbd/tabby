@@ -1,165 +1,194 @@
+/*
+ * Bed art: a 48x32 native-pixel PNG drawn at 4x (keep in sync with
+ * BED_WIDTH/BED_HEIGHT in layout.ts). build.mjs inlines it as a data: URI in
+ * place of the token below. bed.ts snaps the transform to whole pixels so
+ * image-rendering: pixelated stays crisp.
+ */
+@font-face {
+	font-family: "Tabby Pixel";
+	src: url("__TABBY_PIXEL_FONT__") format("woff2");
+	font-display: swap;
+}
+
 #tabby-bed {
 	position: fixed;
 	top: 0;
 	left: 0;
-	width: 64px;
-	height: 40px;
+	width: 192px;
+	height: 128px;
 	z-index: 2147483646;
 	pointer-events: none;
 	will-change: transform;
-	border-radius: 20px / 14px;
-	background: #7a6a58;
-	box-shadow:
-		inset 0 4px 0 rgba(255, 255, 255, 0.08),
-		inset 0 -8px 0 rgba(0, 0, 0, 0.18),
-		0 2px 6px rgba(0, 0, 0, 0.25);
+	background-image: url("__TABBY_BED__");
+	background-repeat: no-repeat;
+	background-size: 100% 100%;
+	image-rendering: pixelated;
 }
 
 #tabby-bed-label {
-	position: absolute;
-	left: 50%;
-	bottom: 100%;
-	transform: translateX(-50%);
-	margin-bottom: 6px;
-	font:
-		600 11px / 1 ui-sans-serif,
-		system-ui,
-		sans-serif;
-	color: rgba(0, 0, 0, 0.55);
-	text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 192px;
+	text-align: center;
+	z-index: 2147483646;
+	pointer-events: none;
+	will-change: transform;
+	font-family: "Tabby Pixel", "Courier New", monospace;
+	font-size: 14px;
+	line-height: 1;
+	font-weight: 700;
+	color: #fff;
+	text-shadow:
+		0 1px 0 rgba(0, 0, 0, 0.55),
+		0 0 3px rgba(0, 0, 0, 0.6);
 	white-space: nowrap;
 }
 
+/*
+ * Bowl art: two 16x12 native-pixel PNGs, drawn at 4x (keep in sync with
+ * BOWL_WIDTH/BOWL_HEIGHT in layout.ts). build.mjs inlines each as a data: URI
+ * in place of the tokens below. bowl.ts snaps the transform to whole pixels so
+ * image-rendering: pixelated stays crisp.
+ */
 #tabby-bowl {
 	position: fixed;
 	top: 0;
 	left: 0;
-	width: 28px;
-	height: 28px;
+	width: 64px;
+	height: 48px;
 	z-index: 2147483646;
 	pointer-events: auto;
 	cursor: pointer;
 	will-change: transform;
-	border-radius: 0 0 14px 14px / 0 0 20px 20px;
-	background: #9fb0bd;
-	box-shadow:
-		inset 0 3px 0 rgba(255, 255, 255, 0.12),
-		inset 0 -6px 0 rgba(0, 0, 0, 0.16),
-		0 2px 5px rgba(0, 0, 0, 0.22);
+	background-image: url("__TABBY_BOWL_EMPTY__");
+	background-repeat: no-repeat;
+	background-size: 100% 100%;
+	image-rendering: pixelated;
 }
 
 #tabby-bowl[data-filled="true"] {
-	background:
-		radial-gradient(circle at 50% 40%, #8a5a2c 0, #8a5a2c 8px, transparent 9px),
-		#9fb0bd;
+	background-image: url("__TABBY_BOWL_FULL__");
 }
 
 #tabby-root {
+	/* One sprite cell on screen. Keep in sync with PET_SIZE in layout.ts. */
+	--cell: 144px;
 	position: fixed;
 	top: 0;
 	left: 0;
-	width: 48px;
-	height: 48px;
+	width: var(--cell);
+	height: var(--cell);
 	z-index: 2147483647;
 	pointer-events: none;
 	will-change: transform;
 }
 
+/*
+ * Sprite sheet: DelineArte cat pack, one 32x32-cell colour ("Calico Cat.png"),
+ * a 4-column x 8-row grid. build.mjs inlines it as a data: URI in place of the
+ * token below; if the pack is absent it appends a plain-box fallback instead.
+ * Every frame offset is a multiple of --cell: col c, row r -> position
+ * calc(var(--cell) * -c) calc(var(--cell) * -r).
+ */
 #tabby-sprite {
+	--face: 1;
 	position: relative;
+	top: 0;
 	width: 100%;
 	height: 100%;
 	pointer-events: auto;
 	cursor: grab;
-	border-radius: 12px 12px 8px 8px;
-	background: #d69860;
-	box-shadow:
-		inset 0 -6px 0 rgba(0, 0, 0, 0.12),
-		0 2px 6px rgba(0, 0, 0, 0.25);
-	transition:
-		border-radius 0.3s ease,
-		transform 0.3s ease;
+	background-image: url("__TABBY_SPRITE_SHEET__");
+	background-repeat: no-repeat;
+	background-size: calc(var(--cell) * 4) calc(var(--cell) * 8);
+	background-position: 0 calc(var(--cell) * -3);
+	image-rendering: pixelated;
+	transform: scaleX(var(--face));
 }
 
-#tabby-sprite::after {
-	content: "";
-	position: absolute;
-	top: 14px;
-	right: 10px;
-	width: 6px;
-	height: 6px;
-	border-radius: 50%;
-	background: rgba(0, 0, 0, 0.55);
-}
-
-#tabby-root[data-facing="left"] #tabby-sprite::after {
-	right: auto;
-	left: 10px;
-}
-
-#tabby-root[data-state="IdleLie"] #tabby-sprite {
-	border-radius: 24px / 18px;
-	transform: translateY(14px) scaleY(0.55);
-}
-
-#tabby-root[data-state="Napping"] #tabby-sprite {
-	border-radius: 24px / 14px;
-	transform: translateY(20px) scaleY(0.4);
-	animation: tabby-breathe 3s ease-in-out infinite;
-}
-
-@keyframes tabby-breathe {
-	0%,
-	100% {
-		transform: translateY(20px) scaleY(0.4);
-	}
-	50% {
-		transform: translateY(18px) scaleY(0.44);
-	}
-}
-
-#tabby-root[data-state="Dragged"] #tabby-sprite {
-	cursor: grabbing;
-	transform: scale(1.1) rotate(-4deg);
-	box-shadow:
-		inset 0 -6px 0 rgba(0, 0, 0, 0.12),
-		0 8px 16px rgba(0, 0, 0, 0.3);
-	transition: none;
+#tabby-root[data-facing="left"] #tabby-sprite {
+	--face: -1;
 }
 
 #tabby-root[data-state="Walking"] #tabby-sprite,
 #tabby-root[data-state="ReturningToBase"] #tabby-sprite {
-	animation: tabby-waddle 0.4s ease-in-out infinite;
+	animation: tabby-hop 0.5s steps(4) infinite;
 }
 
-#tabby-root[data-state="Sleeping"] #tabby-sprite {
-	border-radius: 24px / 14px;
-	transform: translateY(20px) scaleY(0.4);
-	animation: tabby-breathe 4s ease-in-out infinite;
+@keyframes tabby-hop {
+	from {
+		background-position: 0 0;
+	}
+	to {
+		background-position: calc(var(--cell) * -4) 0;
+	}
+}
+
+#tabby-root[data-state="IdleSit"] #tabby-sprite {
+	animation: tabby-sit 2.8s steps(4) infinite alternate;
+}
+
+#tabby-root[data-state="AtBase"] #tabby-sprite {
+	background-position: 0 calc(var(--cell) * -3);
 }
 
 #tabby-root[data-state="Eating"] #tabby-sprite {
-	animation: tabby-nibble 0.5s ease-in-out infinite;
+	animation:
+		tabby-sit 2.8s steps(4) infinite alternate,
+		tabby-nibble 0.45s ease-in-out infinite;
+}
+
+@keyframes tabby-sit {
+	from {
+		background-position: 0 calc(var(--cell) * -3);
+	}
+	to {
+		background-position: calc(var(--cell) * -4) calc(var(--cell) * -3);
+	}
 }
 
 @keyframes tabby-nibble {
 	0%,
 	100% {
-		transform: translateY(0) rotate(0deg);
+		top: 0;
 	}
 	50% {
-		transform: translateY(4px) rotate(1deg);
+		top: 4px;
 	}
 }
 
-@keyframes tabby-waddle {
-	0%,
-	100% {
-		transform: translateY(0) rotate(-3deg);
+#tabby-root[data-state="IdleLie"] #tabby-sprite {
+	animation: tabby-lie 4s steps(4) infinite alternate;
+}
+
+@keyframes tabby-lie {
+	from {
+		background-position: 0 calc(var(--cell) * -5);
 	}
-	50% {
-		transform: translateY(-3px) rotate(3deg);
+	to {
+		background-position: calc(var(--cell) * -4) calc(var(--cell) * -5);
 	}
+}
+
+#tabby-root[data-state="Napping"] #tabby-sprite,
+#tabby-root[data-state="Sleeping"] #tabby-sprite {
+	animation: tabby-sleep 3.6s steps(3) infinite alternate;
+}
+
+@keyframes tabby-sleep {
+	from {
+		background-position: 0 calc(var(--cell) * -7);
+	}
+	to {
+		background-position: calc(var(--cell) * -3) calc(var(--cell) * -7);
+	}
+}
+
+#tabby-root[data-state="Dragged"] #tabby-sprite {
+	cursor: grabbing;
+	background-position: 0 calc(var(--cell) * -1);
+	transform: scaleX(var(--face)) rotate(-3deg) scale(1.05);
 }
 
 .tabby-heart {

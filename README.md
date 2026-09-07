@@ -8,11 +8,13 @@ distribution.
 1. `pnpm install && pnpm build`
 2. Open `chrome://extensions`, enable **Developer mode**
 3. **Load unpacked** → select the **`dist/`** folder
-4. Open a normal web page — a placeholder blob sits in the bottom-right corner
+4. Open a normal web page — Tabby sits in the bottom-right corner
 
-`dist/` is committed, so a fresh clone can skip step 1 and load `dist/` directly.
-It is an unminified build of `src/` on purpose: the code Chrome runs stays
-readable and checkable against `manifest.json`.
+`dist/content.js` is committed (unminified on purpose — the code Chrome runs
+stays readable and checkable against `manifest.json`), but `dist/pet.css` is
+**not**: it bakes in the non-redistributable sprite sheet, so it has to be
+rebuilt locally with `pnpm build` after obtaining the sprite pack (see
+[`CREDITS.md`](CREDITS.md)). Without it the pet still runs but renders unstyled.
 
 ## Dev
 
@@ -38,6 +40,18 @@ runs the same steps on push and PR.
 - `src/render/` — pet element + layout math. DOM only, no `chrome.*`.
 - `src/platform/` — thin wrappers over `chrome.*` (only `storage` so far)
 - `manifest.json` — source of truth; copied into `dist/` by the build
+
+## Art
+
+Cat sprites are by DelineArte — see [`CREDITS.md`](CREDITS.md). The raw files
+are not committed (license forbids redistributing them); `Cat Sprites/` is
+git-ignored. Obtain the pack separately to rebuild the art locally.
+
+## Sounds
+
+The petting meows are derived from a CC0 freesound clip by itinerantmonk108 —
+see [`CREDITS.md`](CREDITS.md). The `.wav` files are committed under
+`src/assets/sounds/` and embedded into `dist/` at build time.
 
 ## Permissions
 
