@@ -2,8 +2,8 @@ import { isIdlePose } from "./idleLoop.ts";
 import { PET_SIZE, type Point, type Viewport } from "./layout.ts";
 import type { Facing, PetState } from "./petState.ts";
 
-export const WANDER_MIN_MS = 120_000;
-export const WANDER_MAX_MS = 300_000;
+export const WANDER_MIN_MS = 30_000;
+export const WANDER_MAX_MS = 60_000;
 export const WALK_SPEED_PX_PER_S = 90;
 export const WANDER_MARGIN = 24;
 

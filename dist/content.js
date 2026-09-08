@@ -42,7 +42,7 @@
   }
 
   // src/render/layout.ts
-  var PET_SIZE = 144;
+  var PET_SIZE = 176;
   var BASE_MARGIN = 24;
   var BED_WIDTH = 192;
   var BED_HEIGHT = 128;
@@ -167,8 +167,8 @@
   }
 
   // src/render/walkLoop.ts
-  var WANDER_MIN_MS = 12e4;
-  var WANDER_MAX_MS = 3e5;
+  var WANDER_MIN_MS = 3e4;
+  var WANDER_MAX_MS = 6e4;
   var WALK_SPEED_PX_PER_S = 90;
   var WANDER_MARGIN = 24;
   function wanderDelayMs(rng = Math.random) {
@@ -738,7 +738,7 @@
       const heart = doc.createElement("div");
       heart.className = "tabby-heart";
       heart.textContent = "\u2665";
-      heart.style.setProperty("--dx", `${Math.round((rng() - 0.5) * 32)}px`);
+      heart.style.setProperty("--dx", `${Math.round((rng() - 0.5) * 48)}px`);
       heart.style.setProperty("--delay", `${i * 90}ms`);
       heart.addEventListener("animationend", () => heart.remove());
       container.appendChild(heart);

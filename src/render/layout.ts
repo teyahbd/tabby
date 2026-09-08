@@ -1,5 +1,5 @@
 // Keep in sync with `--cell` in pet.css.
-export const PET_SIZE = 144;
+export const PET_SIZE = 176;
 export const BASE_MARGIN = 24;
 // Bed art is 48x32 native pixels, drawn at 4x so it stays on an integer scale.
 export const BED_WIDTH = 192;

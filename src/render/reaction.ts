@@ -31,7 +31,7 @@ export function spawnHearts(
 		const heart = doc.createElement("div");
 		heart.className = "tabby-heart";
 		heart.textContent = "♥";
-		heart.style.setProperty("--dx", `${Math.round((rng() - 0.5) * 32)}px`);
+		heart.style.setProperty("--dx", `${Math.round((rng() - 0.5) * 48)}px`);
 		heart.style.setProperty("--delay", `${i * 90}ms`);
 		heart.addEventListener("animationend", () => heart.remove());
 		container.appendChild(heart);

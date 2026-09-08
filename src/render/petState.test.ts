@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { basePosition, bowlFeedSpot } from "./layout.ts";
+import { basePosition, bowlFeedSpot, PET_SIZE } from "./layout.ts";
 import {
 	initialSnapshot,
 	repositionOnResize,
@@ -101,7 +101,10 @@ test("repositionOnResize clamps other states back onto the screen", () => {
 		stateEnteredAt: 1,
 	};
 	const next = repositionOnResize(saved, { width: 500, height: 400 });
-	assert.deepEqual({ x: next.x, y: next.y }, { x: 356, y: 256 });
+	assert.deepEqual(
+		{ x: next.x, y: next.y },
+		{ x: 500 - PET_SIZE, y: 400 - PET_SIZE },
+	);
 });
 
 test("repositionOnResize returns the same object when nothing moves", () => {

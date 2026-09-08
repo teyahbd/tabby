@@ -73,7 +73,7 @@
 
 #tabby-root {
 	/* One sprite cell on screen. Keep in sync with PET_SIZE in layout.ts. */
-	--cell: 144px;
+	--cell: 176px;
 	position: fixed;
 	top: 0;
 	left: 0;
@@ -193,8 +193,8 @@
 
 #tabby-zzz {
 	position: absolute;
-	left: 68%;
-	top: 24%;
+	left: 60%;
+	top: 34%;
 	display: none;
 	pointer-events: none;
 }
@@ -217,13 +217,13 @@
 }
 
 #tabby-zzz span:nth-child(1) {
-	font-size: 12px;
-}
-#tabby-zzz span:nth-child(2) {
 	font-size: 16px;
 }
+#tabby-zzz span:nth-child(2) {
+	font-size: 22px;
+}
 #tabby-zzz span:nth-child(3) {
-	font-size: 20px;
+	font-size: 28px;
 }
 
 @keyframes tabby-zzz-float {
@@ -235,7 +235,7 @@
 		opacity: 0.9;
 	}
 	100% {
-		transform: translate(20px, -40px) rotate(8deg);
+		transform: translate(24px, -52px) rotate(8deg);
 		opacity: 0;
 	}
 }
@@ -243,8 +243,8 @@
 .tabby-heart {
 	position: absolute;
 	left: 50%;
-	top: 0;
-	font-size: 14px;
+	top: 22%;
+	font-size: 24px;
 	line-height: 1;
 	color: #ff6b8b;
 	pointer-events: none;
@@ -261,7 +261,7 @@
 		opacity: 1;
 	}
 	100% {
-		transform: translate(calc(-50% + var(--dx, 0px)), -34px) scale(1);
+		transform: translate(calc(-50% + var(--dx, 0px)), -48px) scale(1);
 		opacity: 0;
 	}
 }
