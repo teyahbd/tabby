@@ -97,6 +97,9 @@ function scene(
 		onEatStep: (next) => {
 			position = next;
 		},
+		onEatArrive: (next) => {
+			position = next;
+		},
 		onFinishEating: (next) => {
 			current = "IdleSit";
 			position = { x: next.x, y: next.y };
@@ -184,6 +187,12 @@ test("a resumed Eating pet finishes the meal instead of restarting it", () => {
 	assert.deepEqual(s.events, ["finish"]);
 	assert.equal(s.state, "IdleSit");
 	assert.deepEqual(s.stored, { bowlFilled: false, lastAteAt: 10_000_000 });
+});
+
+test("a resumed Eating pet parks at the bowl so a later resume does not re-walk", () => {
+	const s = scene("Eating", filled, { x: 100, y: 100 }, 10_000_000 - 20_000);
+	for (let i = 0; i < 500 && s.h.hasFrame; i++) s.h.advance(50);
+	assert.deepEqual(s.position, bowlFeedSpot(viewport));
 });
 
 test("a resumed Eating pet whose meal already elapsed finishes immediately", () => {

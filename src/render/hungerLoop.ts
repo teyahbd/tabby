@@ -47,6 +47,7 @@ export interface HungerLoopDeps {
 	getEnteredAt: () => number;
 	onEatStart: (next: { facing: Facing }) => void;
 	onEatStep: (pos: Point) => void;
+	onEatArrive: (pos: Point) => void;
 	onFinishEating: (next: { ateAt: number; x: number; y: number }) => void;
 	setTimer?: (fn: () => void, ms: number) => number;
 	clearTimer?: (handle: number) => void;
@@ -102,6 +103,7 @@ export function startHungerLoop(deps: HungerLoopDeps): () => void {
 			last = t;
 			if (step.arrived) {
 				rafHandle = null;
+				deps.onEatArrive({ x: target.x, y: target.y });
 				eatHandle = setTimer(finish, eatMs);
 				return;
 			}

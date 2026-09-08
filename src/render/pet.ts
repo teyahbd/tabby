@@ -210,6 +210,7 @@ export function mountPet(
 					stateEnteredAt: Date.now(),
 				}),
 			onEatStep: ({ x, y }) => patchSnapshot({ x, y }, false),
+			onEatArrive: ({ x, y }) => patchSnapshot({ x, y }),
 			onFinishEating: ({ ateAt, x, y }) => {
 				patchSnapshot({
 					currentState: "IdleSit",

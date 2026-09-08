@@ -317,6 +317,7 @@
         last = t;
         if (step.arrived) {
           rafHandle = null;
+          deps.onEatArrive({ x: target.x, y: target.y });
           eatHandle = setTimer(finish, eatMs);
           return;
         }
@@ -935,6 +936,7 @@
           stateEnteredAt: Date.now()
         }),
         onEatStep: ({ x, y }) => patchSnapshot({ x, y }, false),
+        onEatArrive: ({ x, y }) => patchSnapshot({ x, y }),
         onFinishEating: ({ ateAt, x, y }) => {
           patchSnapshot({
             currentState: "IdleSit",
