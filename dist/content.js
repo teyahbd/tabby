@@ -574,6 +574,7 @@
     const nowDate = deps.nowDate ?? (() => /* @__PURE__ */ new Date());
     let timerHandle = null;
     let rafHandle = null;
+    let firstCheck = true;
     const arm = () => {
       timerHandle = setTimer(check, NIGHT_CHECK_MS);
     };
@@ -604,6 +605,8 @@
     };
     const check = () => {
       timerHandle = null;
+      const wasFirstCheck = firstCheck;
+      firstCheck = false;
       const state = deps.getState();
       if (!isNight(nowDate())) {
         if (state === "Sleeping") deps.onWake();
@@ -613,8 +616,12 @@
       if (state === "AtBase") {
         deps.onSleep(deps.getPosition());
       } else if (RETURN_START_STATES.has(state)) {
-        startReturn();
-        return;
+        if (wasFirstCheck) {
+          deps.onSleep(basePosition(deps.getViewport()));
+        } else {
+          startReturn();
+          return;
+        }
       }
       arm();
     };

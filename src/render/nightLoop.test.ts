@@ -58,6 +58,7 @@ function harness() {
 const viewport = { width: 1000, height: 800 };
 const night = () => new Date(2026, 8, 6, 23, 0);
 const morning = () => new Date(2026, 8, 6, 8, 0);
+const nowDateRef = { value: morning() };
 
 function scene(state: PetState, nowDate: () => Date, pos = { x: 100, y: 100 }) {
 	const h = harness();
@@ -112,8 +113,21 @@ function scene(state: PetState, nowDate: () => Date, pos = { x: 100, y: 100 }) {
 	};
 }
 
-test("night walk from an idle state returns to base and sleeps", () => {
+test("night on mount from an idle state sleeps in bed without walking", () => {
 	const s = scene("IdleSit", night);
+	assert.deepEqual(s.events, ["sleep"]);
+	assert.equal(s.state, "Sleeping");
+	assert.equal(s.h.hasFrame, false);
+	assert.deepEqual(s.position, basePosition(viewport));
+	assert.ok(s.h.hasTimer);
+});
+
+test("nightfall while running walks the pet back to base and sleeps", () => {
+	nowDateRef.value = morning();
+	const s = scene("IdleSit", () => nowDateRef.value);
+	nowDateRef.value = night();
+	s.h.fireTimer();
+
 	assert.deepEqual(s.events, ["depart"]);
 	assert.equal(s.state, "ReturningToBase");
 
@@ -132,7 +146,10 @@ test("night with the pet already at base sleeps in place", () => {
 });
 
 test("the return walk bails if the pet is grabbed mid-way", () => {
-	const s = scene("IdleLie", night);
+	nowDateRef.value = morning();
+	const s = scene("IdleLie", () => nowDateRef.value);
+	nowDateRef.value = night();
+	s.h.fireTimer();
 	s.h.advance(100);
 	assert.equal(s.h.hasFrame, true);
 
@@ -142,6 +159,17 @@ test("the return walk bails if the pet is grabbed mid-way", () => {
 	assert.equal(s.h.hasFrame, false);
 	assert.ok(s.h.hasTimer);
 	assert.deepEqual(s.events, ["depart"]);
+});
+
+test("stopping the night loop mid-walk cancels pending work", () => {
+	nowDateRef.value = morning();
+	const s = scene("IdleSit", () => nowDateRef.value);
+	nowDateRef.value = night();
+	s.h.fireTimer();
+	assert.ok(s.h.hasFrame);
+	s.stop();
+	assert.equal(s.h.hasFrame, false);
+	assert.equal(s.h.hasTimer, false);
 });
 
 test("morning wakes a sleeping pet to IdleSit", () => {
@@ -171,7 +199,7 @@ test("Eating and Dragged are left undisturbed at night", () => {
 
 test("stopping the night loop cancels pending work", () => {
 	const s = scene("IdleSit", night);
-	assert.ok(s.h.hasFrame);
+	assert.equal(s.state, "Sleeping");
 	s.stop();
 	assert.equal(s.h.hasFrame, false);
 	assert.equal(s.h.hasTimer, false);

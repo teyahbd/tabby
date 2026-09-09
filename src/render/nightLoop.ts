@@ -46,6 +46,7 @@ export function startNightLoop(deps: NightLoopDeps): () => void {
 
 	let timerHandle: number | null = null;
 	let rafHandle: number | null = null;
+	let firstCheck = true;
 
 	const arm = () => {
 		timerHandle = setTimer(check, NIGHT_CHECK_MS);
@@ -80,6 +81,8 @@ export function startNightLoop(deps: NightLoopDeps): () => void {
 
 	const check = () => {
 		timerHandle = null;
+		const wasFirstCheck = firstCheck;
+		firstCheck = false;
 		const state = deps.getState();
 
 		if (!isNight(nowDate())) {
@@ -91,8 +94,12 @@ export function startNightLoop(deps: NightLoopDeps): () => void {
 		if (state === "AtBase") {
 			deps.onSleep(deps.getPosition());
 		} else if (RETURN_START_STATES.has(state)) {
-			startReturn();
-			return;
+			if (wasFirstCheck) {
+				deps.onSleep(basePosition(deps.getViewport()));
+			} else {
+				startReturn();
+				return;
+			}
 		}
 		arm();
 	};
