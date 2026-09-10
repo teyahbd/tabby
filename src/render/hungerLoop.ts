@@ -8,14 +8,21 @@ export const HUNGER_COOLDOWN_MS = 3 * 60 * 60 * 1_000;
 export const HUNGER_CHECK_MS = 5_000;
 export const EAT_DURATION_MS = 60_000;
 
+export const AWAY_EAT_THRESHOLD_MS = 30 * 60 * 1_000;
+export const HEARTBEAT_MS = 60_000;
+
 export interface HungerState {
 	bowlFilled: boolean;
 	lastAteAt: number | null;
+	bowlFilledAt: number | null;
+	lastSeenAt: number | null;
 }
 
 export const DEFAULT_HUNGER: HungerState = {
 	bowlFilled: false,
 	lastAteAt: null,
+	bowlFilledAt: null,
+	lastSeenAt: null,
 };
 
 export const EAT_START_STATES: ReadonlySet<PetState> = new Set<PetState>([
@@ -28,14 +35,48 @@ export const EAT_START_STATES: ReadonlySet<PetState> = new Set<PetState>([
 export function isHungerState(value: unknown): value is HungerState {
 	if (typeof value !== "object" || value === null) return false;
 	const v = value as Record<string, unknown>;
+	const nullableNumber = (x: unknown) =>
+		x === undefined || x === null || typeof x === "number";
 	return (
 		typeof v.bowlFilled === "boolean" &&
-		(v.lastAteAt === null || typeof v.lastAteAt === "number")
+		nullableNumber(v.lastAteAt) &&
+		nullableNumber(v.bowlFilledAt) &&
+		nullableNumber(v.lastSeenAt)
 	);
+}
+
+export function normalizeHunger(value: unknown): HungerState {
+	if (!isHungerState(value)) return DEFAULT_HUNGER;
+	return { ...DEFAULT_HUNGER, ...value };
 }
 
 export function isHungry(lastAteAt: number | null, now: number): boolean {
 	return lastAteAt === null || now - lastAteAt >= HUNGER_COOLDOWN_MS;
+}
+
+export function catchUpAwayMeal(
+	hunger: HungerState,
+	now: number,
+): HungerState | null {
+	if (!hunger.bowlFilled || hunger.bowlFilledAt === null) return null;
+
+	const lastSeen = hunger.lastSeenAt ?? hunger.bowlFilledAt;
+	if (now - lastSeen < AWAY_EAT_THRESHOLD_MS) return null;
+
+	const readyAt =
+		hunger.lastAteAt === null
+			? hunger.bowlFilledAt
+			: Math.max(hunger.bowlFilledAt, hunger.lastAteAt + HUNGER_COOLDOWN_MS);
+
+	const finishedAt = readyAt + EAT_DURATION_MS;
+	if (finishedAt > now) return null;
+
+	return {
+		...hunger,
+		bowlFilled: false,
+		bowlFilledAt: null,
+		lastAteAt: finishedAt,
+	};
 }
 
 export interface HungerLoopDeps {
@@ -49,6 +90,7 @@ export interface HungerLoopDeps {
 	onEatStep: (pos: Point) => void;
 	onEatArrive: (pos: Point) => void;
 	onFinishEating: (next: { ateAt: number; x: number; y: number }) => void;
+	onSeen?: (now: number) => void;
 	setTimer?: (fn: () => void, ms: number) => number;
 	clearTimer?: (handle: number) => void;
 	raf?: (fn: (t: number) => void) => number;
@@ -72,6 +114,14 @@ export function startHungerLoop(deps: HungerLoopDeps): () => void {
 	let rafHandle: number | null = null;
 	let eatHandle: number | null = null;
 	let busy = false;
+	let lastSeenWrite = 0;
+
+	const beat = () => {
+		const t = nowMs();
+		if (t - lastSeenWrite < HEARTBEAT_MS) return;
+		lastSeenWrite = t;
+		deps.onSeen?.(t);
+	};
 
 	const arm = () => {
 		timerHandle = setTimer(check, HUNGER_CHECK_MS);
@@ -128,6 +178,7 @@ export function startHungerLoop(deps: HungerLoopDeps): () => void {
 
 	const check = () => {
 		timerHandle = null;
+		beat();
 		if (busy) {
 			arm();
 			return;

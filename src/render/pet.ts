@@ -3,10 +3,11 @@ import { mountBed } from "./bed.ts";
 import { mountBowl } from "./bowl.ts";
 import { startDragInput } from "./dragInput.ts";
 import {
+	catchUpAwayMeal,
 	DEFAULT_HUNGER,
 	HUNGER_KEY,
 	type HungerState,
-	isHungerState,
+	normalizeHunger,
 	startHungerLoop,
 } from "./hungerLoop.ts";
 import { startIdleLoop } from "./idleLoop.ts";
@@ -191,9 +192,25 @@ export function mountPet(
 
 		const savedHunger = await storage.get<unknown>(HUNGER_KEY);
 		if (disposed) return;
-		hunger = isHungerState(savedHunger) ? savedHunger : DEFAULT_HUNGER;
+		hunger = normalizeHunger(savedHunger);
+
+		const awayMeal =
+			snapshot.currentState === "Eating"
+				? null
+				: catchUpAwayMeal(hunger, Date.now());
+		if (awayMeal) {
+			hunger = awayMeal;
+			await storage.set<HungerState>(HUNGER_KEY, awayMeal);
+			if (
+				snapshot.currentState !== "Sleeping" &&
+				snapshot.currentState !== "Napping"
+			) {
+				reactToPet(root, doc);
+			}
+		}
+
 		unsubHunger = storage.subscribe<unknown>(HUNGER_KEY, (value) => {
-			hunger = isHungerState(value) ? value : DEFAULT_HUNGER;
+			hunger = normalizeHunger(value);
 		});
 
 		stopHunger = startHungerLoop({
@@ -211,6 +228,10 @@ export function mountPet(
 				}),
 			onEatStep: ({ x, y }) => patchSnapshot({ x, y }, false),
 			onEatArrive: ({ x, y }) => patchSnapshot({ x, y }),
+			onSeen: (t) => {
+				hunger = { ...hunger, lastSeenAt: t };
+				void storage.set<HungerState>(HUNGER_KEY, hunger);
+			},
 			onFinishEating: ({ ateAt, x, y }) => {
 				patchSnapshot({
 					currentState: "IdleSit",
@@ -218,10 +239,13 @@ export function mountPet(
 					y,
 					stateEnteredAt: Date.now(),
 				});
-				void storage.set<HungerState>(HUNGER_KEY, {
+				hunger = {
+					...hunger,
 					bowlFilled: false,
+					bowlFilledAt: null,
 					lastAteAt: ateAt,
-				});
+				};
+				void storage.set<HungerState>(HUNGER_KEY, hunger);
 			},
 		});
 	})();

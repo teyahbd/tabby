@@ -3,7 +3,7 @@ import {
 	DEFAULT_HUNGER,
 	HUNGER_KEY,
 	type HungerState,
-	isHungerState,
+	normalizeHunger,
 } from "./hungerLoop.ts";
 import { bowlPosition } from "./layout.ts";
 
@@ -34,12 +34,12 @@ export function mountBowl(
 
 	const onClick = () => {
 		void (async () => {
-			const current = await storage.get<unknown>(HUNGER_KEY);
-			const hunger = isHungerState(current) ? current : DEFAULT_HUNGER;
+			const hunger = normalizeHunger(await storage.get<unknown>(HUNGER_KEY));
 			if (hunger.bowlFilled) return;
 			await storage.set<HungerState>(HUNGER_KEY, {
 				...hunger,
 				bowlFilled: true,
+				bowlFilledAt: Date.now(),
 			});
 		})();
 	};
@@ -50,11 +50,11 @@ export function mountBowl(
 	doc.body.appendChild(bowl);
 
 	const unsubscribe = storage.subscribe<unknown>(HUNGER_KEY, (value) => {
-		reflect(isHungerState(value) ? value : DEFAULT_HUNGER);
+		reflect(normalizeHunger(value));
 	});
 	void storage
 		.get<unknown>(HUNGER_KEY)
-		.then((value) => reflect(isHungerState(value) ? value : DEFAULT_HUNGER));
+		.then((value) => reflect(normalizeHunger(value)));
 
 	const view = doc.defaultView;
 	view?.addEventListener("resize", position);

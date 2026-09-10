@@ -261,9 +261,13 @@
   var HUNGER_COOLDOWN_MS = 3 * 60 * 60 * 1e3;
   var HUNGER_CHECK_MS = 5e3;
   var EAT_DURATION_MS = 6e4;
+  var AWAY_EAT_THRESHOLD_MS = 30 * 60 * 1e3;
+  var HEARTBEAT_MS = 6e4;
   var DEFAULT_HUNGER = {
     bowlFilled: false,
-    lastAteAt: null
+    lastAteAt: null,
+    bowlFilledAt: null,
+    lastSeenAt: null
   };
   var EAT_START_STATES = /* @__PURE__ */ new Set([
     "IdleSit",
@@ -274,10 +278,29 @@
   function isHungerState(value) {
     if (typeof value !== "object" || value === null) return false;
     const v = value;
-    return typeof v.bowlFilled === "boolean" && (v.lastAteAt === null || typeof v.lastAteAt === "number");
+    const nullableNumber = (x) => x === void 0 || x === null || typeof x === "number";
+    return typeof v.bowlFilled === "boolean" && nullableNumber(v.lastAteAt) && nullableNumber(v.bowlFilledAt) && nullableNumber(v.lastSeenAt);
+  }
+  function normalizeHunger(value) {
+    if (!isHungerState(value)) return DEFAULT_HUNGER;
+    return { ...DEFAULT_HUNGER, ...value };
   }
   function isHungry(lastAteAt, now) {
     return lastAteAt === null || now - lastAteAt >= HUNGER_COOLDOWN_MS;
+  }
+  function catchUpAwayMeal(hunger, now) {
+    if (!hunger.bowlFilled || hunger.bowlFilledAt === null) return null;
+    const lastSeen = hunger.lastSeenAt ?? hunger.bowlFilledAt;
+    if (now - lastSeen < AWAY_EAT_THRESHOLD_MS) return null;
+    const readyAt = hunger.lastAteAt === null ? hunger.bowlFilledAt : Math.max(hunger.bowlFilledAt, hunger.lastAteAt + HUNGER_COOLDOWN_MS);
+    const finishedAt = readyAt + EAT_DURATION_MS;
+    if (finishedAt > now) return null;
+    return {
+      ...hunger,
+      bowlFilled: false,
+      bowlFilledAt: null,
+      lastAteAt: finishedAt
+    };
   }
   function startHungerLoop(deps) {
     const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
@@ -290,6 +313,13 @@
     let rafHandle = null;
     let eatHandle = null;
     let busy = false;
+    let lastSeenWrite = 0;
+    const beat = () => {
+      const t = nowMs();
+      if (t - lastSeenWrite < HEARTBEAT_MS) return;
+      lastSeenWrite = t;
+      deps.onSeen?.(t);
+    };
     const arm = () => {
       timerHandle = setTimer(check, HUNGER_CHECK_MS);
     };
@@ -339,6 +369,7 @@
     };
     const check = () => {
       timerHandle = null;
+      beat();
       if (busy) {
         arm();
         return;
@@ -383,12 +414,12 @@
     };
     const onClick = () => {
       void (async () => {
-        const current = await storage2.get(HUNGER_KEY);
-        const hunger = isHungerState(current) ? current : DEFAULT_HUNGER;
+        const hunger = normalizeHunger(await storage2.get(HUNGER_KEY));
         if (hunger.bowlFilled) return;
         await storage2.set(HUNGER_KEY, {
           ...hunger,
-          bowlFilled: true
+          bowlFilled: true,
+          bowlFilledAt: Date.now()
         });
       })();
     };
@@ -397,9 +428,9 @@
     bowl.addEventListener("click", onClick);
     doc.body.appendChild(bowl);
     const unsubscribe = storage2.subscribe(HUNGER_KEY, (value) => {
-      reflect(isHungerState(value) ? value : DEFAULT_HUNGER);
+      reflect(normalizeHunger(value));
     });
-    void storage2.get(HUNGER_KEY).then((value) => reflect(isHungerState(value) ? value : DEFAULT_HUNGER));
+    void storage2.get(HUNGER_KEY).then((value) => reflect(normalizeHunger(value)));
     const view = doc.defaultView;
     view?.addEventListener("resize", position);
     return () => {
@@ -926,9 +957,17 @@
       });
       const savedHunger = await storage2.get(HUNGER_KEY);
       if (disposed) return;
-      hunger = isHungerState(savedHunger) ? savedHunger : DEFAULT_HUNGER;
+      hunger = normalizeHunger(savedHunger);
+      const awayMeal = snapshot.currentState === "Eating" ? null : catchUpAwayMeal(hunger, Date.now());
+      if (awayMeal) {
+        hunger = awayMeal;
+        await storage2.set(HUNGER_KEY, awayMeal);
+        if (snapshot.currentState !== "Sleeping" && snapshot.currentState !== "Napping") {
+          reactToPet(root, doc);
+        }
+      }
       unsubHunger = storage2.subscribe(HUNGER_KEY, (value) => {
-        hunger = isHungerState(value) ? value : DEFAULT_HUNGER;
+        hunger = normalizeHunger(value);
       });
       stopHunger = startHungerLoop({
         getState: () => snapshot?.currentState ?? "IdleSit",
@@ -944,6 +983,10 @@
         }),
         onEatStep: ({ x, y }) => patchSnapshot({ x, y }, false),
         onEatArrive: ({ x, y }) => patchSnapshot({ x, y }),
+        onSeen: (t) => {
+          hunger = { ...hunger, lastSeenAt: t };
+          void storage2.set(HUNGER_KEY, hunger);
+        },
         onFinishEating: ({ ateAt, x, y }) => {
           patchSnapshot({
             currentState: "IdleSit",
@@ -951,10 +994,13 @@
             y,
             stateEnteredAt: Date.now()
           });
-          void storage2.set(HUNGER_KEY, {
+          hunger = {
+            ...hunger,
             bowlFilled: false,
+            bowlFilledAt: null,
             lastAteAt: ateAt
-          });
+          };
+          void storage2.set(HUNGER_KEY, hunger);
         }
       });
     })();

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+	AWAY_EAT_THRESHOLD_MS,
+	catchUpAwayMeal,
 	DEFAULT_HUNGER,
+	EAT_DURATION_MS,
 	HUNGER_COOLDOWN_MS,
 	type HungerState,
 	isHungerState,
@@ -22,6 +25,59 @@ test("isHungerState rejects malformed values", () => {
 	assert.equal(isHungerState({ bowlFilled: true, lastAteAt: 5 }), true);
 	assert.equal(isHungerState({ bowlFilled: "yes" }), false);
 	assert.equal(isHungerState(null), false);
+	assert.equal(
+		isHungerState({ bowlFilled: true, lastAteAt: null, bowlFilledAt: "no" }),
+		false,
+	);
+});
+
+const HOUR = 60 * 60 * 1_000;
+
+test("catchUpAwayMeal leaves an empty bowl alone", () => {
+	assert.equal(catchUpAwayMeal(DEFAULT_HUNGER, 10 * HOUR), null);
+});
+
+test("catchUpAwayMeal ignores a short absence", () => {
+	const now = 10 * HOUR;
+	const hunger: HungerState = {
+		bowlFilled: true,
+		lastAteAt: null,
+		bowlFilledAt: now - 5 * HOUR,
+		lastSeenAt: now - AWAY_EAT_THRESHOLD_MS + 1,
+	};
+	assert.equal(catchUpAwayMeal(hunger, now), null);
+});
+
+test("catchUpAwayMeal empties the bowl and backdates the meal after a long absence", () => {
+	const now = 10 * HOUR;
+	const filledAt = now - 6 * HOUR;
+	const hunger: HungerState = {
+		bowlFilled: true,
+		lastAteAt: null,
+		bowlFilledAt: filledAt,
+		lastSeenAt: now - 4 * HOUR,
+	};
+	assert.deepEqual(catchUpAwayMeal(hunger, now), {
+		bowlFilled: false,
+		lastAteAt: filledAt + EAT_DURATION_MS,
+		bowlFilledAt: null,
+		lastSeenAt: now - 4 * HOUR,
+	});
+});
+
+test("catchUpAwayMeal waits out the cooldown from the previous meal", () => {
+	const now = 10 * HOUR;
+	const lastAteAt = now - 2 * HOUR;
+	const hunger: HungerState = {
+		bowlFilled: true,
+		lastAteAt,
+		bowlFilledAt: now - 90 * 60 * 1_000,
+		lastSeenAt: now - 80 * 60 * 1_000,
+	};
+	assert.equal(catchUpAwayMeal(hunger, now), null);
+
+	const later = lastAteAt + HUNGER_COOLDOWN_MS + EAT_DURATION_MS;
+	assert.deepEqual(catchUpAwayMeal(hunger, later)?.lastAteAt, later);
 });
 
 function harness() {
@@ -103,7 +159,12 @@ function scene(
 		onFinishEating: (next) => {
 			current = "IdleSit";
 			position = { x: next.x, y: next.y };
-			stored = { bowlFilled: false, lastAteAt: next.ateAt };
+			stored = {
+				...stored,
+				bowlFilled: false,
+				bowlFilledAt: null,
+				lastAteAt: next.ateAt,
+			};
 			events.push("finish");
 		},
 		setTimer: h.setTimer,
@@ -133,7 +194,12 @@ function scene(
 	};
 }
 
-const filled: HungerState = { bowlFilled: true, lastAteAt: null };
+const filled: HungerState = {
+	bowlFilled: true,
+	lastAteAt: null,
+	bowlFilledAt: 9_000_000,
+	lastSeenAt: 10_000_000,
+};
 
 test("a hungry pet with a full bowl walks over, eats, and empties the bowl", () => {
 	const s = scene("IdleSit", filled);
@@ -147,7 +213,12 @@ test("a hungry pet with a full bowl walks over, eats, and empties the bowl", () 
 	assert.deepEqual(s.events, ["start", "finish"]);
 	assert.equal(s.state, "IdleSit");
 	assert.deepEqual(s.position, bowlFeedSpot(viewport));
-	assert.deepEqual(s.stored, { bowlFilled: false, lastAteAt: 10_000_000 });
+	assert.deepEqual(s.stored, {
+		bowlFilled: false,
+		lastAteAt: 10_000_000,
+		bowlFilledAt: null,
+		lastSeenAt: 10_000_000,
+	});
 	assert.ok(s.h.hasTimer);
 });
 
@@ -160,7 +231,10 @@ test("an empty bowl leaves the pet alone", () => {
 });
 
 test("a full bowl during the cooldown window is ignored", () => {
-	const s = scene("IdleSit", { bowlFilled: true, lastAteAt: 10_000_000 - 1 });
+	const s = scene("IdleSit", {
+		...filled,
+		lastAteAt: 10_000_000 - 1,
+	});
 	assert.deepEqual(s.events, []);
 	assert.ok(s.h.hasTimer);
 });
@@ -186,7 +260,12 @@ test("a resumed Eating pet finishes the meal instead of restarting it", () => {
 
 	assert.deepEqual(s.events, ["finish"]);
 	assert.equal(s.state, "IdleSit");
-	assert.deepEqual(s.stored, { bowlFilled: false, lastAteAt: 10_000_000 });
+	assert.deepEqual(s.stored, {
+		bowlFilled: false,
+		lastAteAt: 10_000_000,
+		bowlFilledAt: null,
+		lastSeenAt: 10_000_000,
+	});
 });
 
 test("a resumed Eating pet parks at the bowl so a later resume does not re-walk", () => {
