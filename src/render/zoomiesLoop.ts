@@ -53,7 +53,19 @@ export interface ZoomiesLoopDeps {
 	getPosition: () => Point;
 	getFacing: () => Facing;
 	getViewport: () => Viewport;
-	onDepart: (next: { facing: Facing }) => void;
+	// A dash in progress to resume on mount, in place of waiting out the
+	// usual delay timer — see Fix 5. `endAt` is wall-clock (Date.now()-based)
+	// since it has to survive a reload; converted to the loop's monotonic
+	// clock internally.
+	getResumeZoomies?: () => { target: Point; endAt: number } | undefined;
+	// Fired once per session (not per dash) so the wall-clock end time can be
+	// persisted for a resume — see getResumeZoomies.
+	onZoomiesStart?: (next: { endAt: number }) => void;
+	onDepart: (next: {
+		facing: Facing;
+		targetX: number;
+		targetY: number;
+	}) => void;
 	onStep: (pos: Point) => void;
 	onArrive: (next: { currentState: PetState; x: number; y: number }) => void;
 	isNightVisiting?: () => boolean;
@@ -62,6 +74,7 @@ export interface ZoomiesLoopDeps {
 	raf?: (fn: (t: number) => void) => number;
 	cancelRaf?: (handle: number) => void;
 	now?: () => number;
+	nowMs?: () => number;
 	nowDate?: () => Date;
 	rng?: () => number;
 }
@@ -75,6 +88,7 @@ export function startZoomiesLoop(deps: ZoomiesLoopDeps): () => void {
 	const cancelRaf =
 		deps.cancelRaf ?? ((handle) => cancelAnimationFrame(handle));
 	const now = deps.now ?? (() => performance.now());
+	const nowMs = deps.nowMs ?? (() => Date.now());
 	const nowDate = deps.nowDate ?? (() => new Date());
 	const rng = deps.rng ?? Math.random;
 
@@ -92,17 +106,10 @@ export function startZoomiesLoop(deps: ZoomiesLoopDeps): () => void {
 			arm();
 			return;
 		}
-		run();
+		run(zoomiesDurationMs(rng), deps.getPosition());
 	};
 
-	const run = () => {
-		const speed = zoomiesSpeed();
-		const endAt = now() + zoomiesDurationMs(rng);
-
-		const start = deps.getPosition();
-		let dest = pickDestination(deps.getViewport(), rng);
-		deps.onDepart({ facing: facingFor(start.x, dest.x, deps.getFacing()) });
-
+	const dash = (dest: Point, endAt: number) => {
 		let last = now();
 		const frame = (t: number) => {
 			if (deps.getState() !== "Walking") {
@@ -110,7 +117,7 @@ export function startZoomiesLoop(deps: ZoomiesLoopDeps): () => void {
 				arm();
 				return;
 			}
-			const step = walkStep(deps.getPosition(), dest, t - last, speed);
+			const step = walkStep(deps.getPosition(), dest, t - last, zoomiesSpeed());
 			last = t;
 			if (step.arrived) {
 				if (t >= endAt) {
@@ -124,10 +131,14 @@ export function startZoomiesLoop(deps: ZoomiesLoopDeps): () => void {
 					return;
 				}
 				const from = { x: step.x, y: step.y };
-				dest = pickDestination(deps.getViewport(), rng);
+				const next = pickDestination(deps.getViewport(), rng);
 				deps.onStep(from);
-				deps.onDepart({ facing: facingFor(from.x, dest.x, deps.getFacing()) });
-				rafHandle = raf(frame);
+				deps.onDepart({
+					facing: facingFor(from.x, next.x, deps.getFacing()),
+					targetX: next.x,
+					targetY: next.y,
+				});
+				dash(next, endAt);
 				return;
 			}
 			deps.onStep({ x: step.x, y: step.y });
@@ -136,7 +147,34 @@ export function startZoomiesLoop(deps: ZoomiesLoopDeps): () => void {
 		rafHandle = raf(frame);
 	};
 
-	arm();
+	const run = (durationMs: number, start: Point) => {
+		const endAt = now() + durationMs;
+		deps.onZoomiesStart?.({ endAt: nowMs() + durationMs });
+		const dest = pickDestination(deps.getViewport(), rng);
+		deps.onDepart({
+			facing: facingFor(start.x, dest.x, deps.getFacing()),
+			targetX: dest.x,
+			targetY: dest.y,
+		});
+		dash(dest, endAt);
+	};
+
+	const resume = deps.getResumeZoomies?.();
+	if (resume && deps.getState() === "Walking") {
+		const remaining = resume.endAt - nowMs();
+		if (remaining > 0) {
+			dash(resume.target, now() + remaining);
+		} else {
+			deps.onArrive({
+				currentState: "IdleSit",
+				x: deps.getPosition().x,
+				y: deps.getPosition().y,
+			});
+			arm();
+		}
+	} else {
+		arm();
+	}
 
 	return () => {
 		if (timerHandle != null) clearTimer(timerHandle);

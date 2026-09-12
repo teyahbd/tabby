@@ -81,27 +81,66 @@ test("resume clamps a saved position that's now off-screen (Fix 3)", () => {
 	assert.equal(resumedEating.currentState, "Eating");
 });
 
-test("transient states collapse to IdleSit at the saved position", () => {
-	for (const currentState of [
-		"Walking",
-		"Dragged",
-		"ReturningToBase",
-	] as const) {
-		const saved = {
-			x: 10,
-			y: 20,
-			facing: "right" as const,
-			currentState,
-			stateEnteredAt: 42,
-		};
-		assert.deepEqual(resumeSnapshot(saved, viewport, 999), {
-			x: 10,
-			y: 20,
-			facing: "right",
-			currentState: "IdleSit",
-			stateEnteredAt: 999,
-		});
-	}
+test("Dragged always collapses to IdleSit at the saved position (Fix 5)", () => {
+	const saved = {
+		x: 10,
+		y: 20,
+		facing: "right" as const,
+		currentState: "Dragged" as const,
+		stateEnteredAt: 42,
+	};
+	assert.deepEqual(resumeSnapshot(saved, viewport, 999), {
+		x: 10,
+		y: 20,
+		facing: "right",
+		currentState: "IdleSit",
+		stateEnteredAt: 999,
+	});
+});
+
+test("Walking without a stored target collapses to IdleSit (Fix 5)", () => {
+	const saved = {
+		x: 10,
+		y: 20,
+		facing: "right" as const,
+		currentState: "Walking" as const,
+		stateEnteredAt: 42,
+	};
+	assert.deepEqual(resumeSnapshot(saved, viewport, 999), {
+		x: 10,
+		y: 20,
+		facing: "right",
+		currentState: "IdleSit",
+		stateEnteredAt: 999,
+	});
+});
+
+test("Walking with a stored target resumes exactly, toward that target (Fix 5)", () => {
+	const saved = {
+		x: 10,
+		y: 20,
+		facing: "right" as const,
+		currentState: "Walking" as const,
+		stateEnteredAt: 42,
+		targetX: 500,
+		targetY: 300,
+	};
+	assert.deepEqual(resumeSnapshot(saved, viewport, 999), saved);
+
+	// A zoomies dash is stored the same way, plus a session end time.
+	const dashing = { ...saved, zoomiesEndAt: 12_345 };
+	assert.deepEqual(resumeSnapshot(dashing, viewport, 999), dashing);
+});
+
+test("ReturningToBase resumes exactly, walking home instead of collapsing (Fix 5)", () => {
+	const saved = {
+		x: 10,
+		y: 20,
+		facing: "right" as const,
+		currentState: "ReturningToBase" as const,
+		stateEnteredAt: 42,
+	};
+	assert.deepEqual(resumeSnapshot(saved, viewport, 999), saved);
 });
 
 test("repositionOnResize re-anchors resting states to their layout spot", () => {

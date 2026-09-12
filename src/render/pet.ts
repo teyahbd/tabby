@@ -147,10 +147,25 @@ export function mountPet(
 			getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
 			getFacing: () => snapshot?.facing ?? "left",
 			getViewport: () => viewport(doc),
-			onDepart: ({ facing }) =>
+			getResumeTarget: () => {
+				if (!snapshot || snapshot.currentState !== "Walking") return undefined;
+				// zoomiesLoop's resume claims this walk instead
+				if (snapshot.zoomiesEndAt != null) return undefined;
+				if (
+					typeof snapshot.targetX !== "number" ||
+					typeof snapshot.targetY !== "number"
+				) {
+					return undefined;
+				}
+				return { x: snapshot.targetX, y: snapshot.targetY };
+			},
+			onDepart: ({ facing, targetX, targetY }) =>
 				patchSnapshot({
 					currentState: "Walking",
 					facing,
+					targetX,
+					targetY,
+					zoomiesEndAt: undefined,
 					stateEnteredAt: Date.now(),
 				}),
 			onStep: ({ x, y }) => patchSnapshot({ x, y }, false),
@@ -163,15 +178,39 @@ export function mountPet(
 			getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
 			getFacing: () => snapshot?.facing ?? "left",
 			getViewport: () => viewport(doc),
-			onDepart: ({ facing }) =>
+			getResumeZoomies: () => {
+				if (!snapshot || snapshot.currentState !== "Walking") return undefined;
+				if (snapshot.zoomiesEndAt == null) return undefined;
+				if (
+					typeof snapshot.targetX !== "number" ||
+					typeof snapshot.targetY !== "number"
+				) {
+					return undefined;
+				}
+				return {
+					target: { x: snapshot.targetX, y: snapshot.targetY },
+					endAt: snapshot.zoomiesEndAt,
+				};
+			},
+			onZoomiesStart: ({ endAt }) =>
+				patchSnapshot({ zoomiesEndAt: endAt }, false),
+			onDepart: ({ facing, targetX, targetY }) =>
 				patchSnapshot({
 					currentState: "Walking",
 					facing,
+					targetX,
+					targetY,
 					stateEnteredAt: Date.now(),
 				}),
 			onStep: ({ x, y }) => patchSnapshot({ x, y }, false),
 			onArrive: ({ currentState, x, y }) =>
-				patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() }),
+				patchSnapshot({
+					currentState,
+					x,
+					y,
+					zoomiesEndAt: undefined,
+					stateEnteredAt: Date.now(),
+				}),
 			isNightVisiting: () => isNightVisiting(nightVisitUntil, Date.now()),
 		});
 

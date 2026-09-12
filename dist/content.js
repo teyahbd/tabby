@@ -214,15 +214,7 @@
     const arm = () => {
       timerHandle = setTimer(depart, wanderDelayMs(rng));
     };
-    const depart = () => {
-      timerHandle = null;
-      if (!isIdlePose(deps.getState())) {
-        arm();
-        return;
-      }
-      const start = deps.getPosition();
-      const dest = pickDestination(deps.getViewport(), rng);
-      deps.onDepart({ facing: facingFor(start.x, dest.x, deps.getFacing()) });
+    const walkTo = (dest) => {
       let last = now();
       const frame = (t) => {
         if (deps.getState() !== "Walking") {
@@ -247,7 +239,27 @@
       };
       rafHandle = raf(frame);
     };
-    arm();
+    const depart = () => {
+      timerHandle = null;
+      if (!isIdlePose(deps.getState())) {
+        arm();
+        return;
+      }
+      const start = deps.getPosition();
+      const dest = pickDestination(deps.getViewport(), rng);
+      deps.onDepart({
+        facing: facingFor(start.x, dest.x, deps.getFacing()),
+        targetX: dest.x,
+        targetY: dest.y
+      });
+      walkTo(dest);
+    };
+    const resumeTarget = deps.getResumeTarget?.();
+    if (resumeTarget && deps.getState() === "Walking") {
+      walkTo(resumeTarget);
+    } else {
+      arm();
+    }
     return () => {
       if (timerHandle != null) clearTimer(timerHandle);
       if (rafHandle != null) cancelRaf(rafHandle);
@@ -653,12 +665,16 @@
       firstCheck = false;
       const state = deps.getState();
       if (!isNight(nowDate())) {
-        if (state === "Sleeping") deps.onWake();
+        if (state === "Sleeping" || state === "ReturningToBase") deps.onWake();
         arm();
         return;
       }
       if (deps.isNightVisiting?.()) {
         arm();
+        return;
+      }
+      if (state === "ReturningToBase") {
+        startReturn();
         return;
       }
       if (state === "AtBase") {
@@ -737,6 +753,13 @@
   function isStable(state) {
     return STABLE_STATES.has(state);
   }
+  function isResumableMotion(saved) {
+    if (saved.currentState === "ReturningToBase") return true;
+    if (saved.currentState === "Walking") {
+      return typeof saved.targetX === "number" && typeof saved.targetY === "number";
+    }
+    return false;
+  }
   function initialSnapshot(viewport2, now = Date.now()) {
     const pos = basePosition(viewport2);
     return {
@@ -750,11 +773,12 @@
   function isPetSnapshot(value) {
     if (typeof value !== "object" || value === null) return false;
     const v = value;
-    return typeof v.x === "number" && typeof v.y === "number" && (v.facing === "left" || v.facing === "right") && typeof v.currentState === "string" && typeof v.stateEnteredAt === "number";
+    const optionalNumber = (x) => x === void 0 || typeof x === "number";
+    return typeof v.x === "number" && typeof v.y === "number" && (v.facing === "left" || v.facing === "right") && typeof v.currentState === "string" && typeof v.stateEnteredAt === "number" && optionalNumber(v.targetX) && optionalNumber(v.targetY) && optionalNumber(v.zoomiesEndAt);
   }
   function resumeSnapshot(saved, viewport2, now = Date.now()) {
     if (!isPetSnapshot(saved)) return initialSnapshot(viewport2, now);
-    const resumed = isStable(saved.currentState) ? saved : { ...saved, currentState: "IdleSit", stateEnteredAt: now };
+    const resumed = isStable(saved.currentState) || isResumableMotion(saved) ? saved : { ...saved, currentState: "IdleSit", stateEnteredAt: now };
     const pos = clampPoint({ x: resumed.x, y: resumed.y }, viewport2);
     if (pos.x === resumed.x && pos.y === resumed.y) return resumed;
     return { ...resumed, x: pos.x, y: pos.y };
@@ -896,6 +920,7 @@
     const raf = deps.raf ?? ((fn) => requestAnimationFrame(fn));
     const cancelRaf = deps.cancelRaf ?? ((handle) => cancelAnimationFrame(handle));
     const now = deps.now ?? (() => performance.now());
+    const nowMs = deps.nowMs ?? (() => Date.now());
     const nowDate = deps.nowDate ?? (() => /* @__PURE__ */ new Date());
     const rng = deps.rng ?? Math.random;
     let timerHandle = null;
@@ -910,14 +935,9 @@
         arm();
         return;
       }
-      run();
+      run(zoomiesDurationMs(rng), deps.getPosition());
     };
-    const run = () => {
-      const speed = zoomiesSpeed();
-      const endAt = now() + zoomiesDurationMs(rng);
-      const start = deps.getPosition();
-      let dest = pickDestination(deps.getViewport(), rng);
-      deps.onDepart({ facing: facingFor(start.x, dest.x, deps.getFacing()) });
+    const dash = (dest, endAt) => {
       let last = now();
       const frame = (t) => {
         if (deps.getState() !== "Walking") {
@@ -925,7 +945,7 @@
           arm();
           return;
         }
-        const step = walkStep(deps.getPosition(), dest, t - last, speed);
+        const step = walkStep(deps.getPosition(), dest, t - last, zoomiesSpeed());
         last = t;
         if (step.arrived) {
           if (t >= endAt) {
@@ -939,10 +959,14 @@
             return;
           }
           const from = { x: step.x, y: step.y };
-          dest = pickDestination(deps.getViewport(), rng);
+          const next = pickDestination(deps.getViewport(), rng);
           deps.onStep(from);
-          deps.onDepart({ facing: facingFor(from.x, dest.x, deps.getFacing()) });
-          rafHandle = raf(frame);
+          deps.onDepart({
+            facing: facingFor(from.x, next.x, deps.getFacing()),
+            targetX: next.x,
+            targetY: next.y
+          });
+          dash(next, endAt);
           return;
         }
         deps.onStep({ x: step.x, y: step.y });
@@ -950,7 +974,33 @@
       };
       rafHandle = raf(frame);
     };
-    arm();
+    const run = (durationMs, start) => {
+      const endAt = now() + durationMs;
+      deps.onZoomiesStart?.({ endAt: nowMs() + durationMs });
+      const dest = pickDestination(deps.getViewport(), rng);
+      deps.onDepart({
+        facing: facingFor(start.x, dest.x, deps.getFacing()),
+        targetX: dest.x,
+        targetY: dest.y
+      });
+      dash(dest, endAt);
+    };
+    const resume = deps.getResumeZoomies?.();
+    if (resume && deps.getState() === "Walking") {
+      const remaining = resume.endAt - nowMs();
+      if (remaining > 0) {
+        dash(resume.target, now() + remaining);
+      } else {
+        deps.onArrive({
+          currentState: "IdleSit",
+          x: deps.getPosition().x,
+          y: deps.getPosition().y
+        });
+        arm();
+      }
+    } else {
+      arm();
+    }
     return () => {
       if (timerHandle != null) clearTimer(timerHandle);
       if (rafHandle != null) cancelRaf(rafHandle);
@@ -1058,9 +1108,20 @@
         getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
         getFacing: () => snapshot?.facing ?? "left",
         getViewport: () => viewport(doc),
-        onDepart: ({ facing }) => patchSnapshot({
+        getResumeTarget: () => {
+          if (!snapshot || snapshot.currentState !== "Walking") return void 0;
+          if (snapshot.zoomiesEndAt != null) return void 0;
+          if (typeof snapshot.targetX !== "number" || typeof snapshot.targetY !== "number") {
+            return void 0;
+          }
+          return { x: snapshot.targetX, y: snapshot.targetY };
+        },
+        onDepart: ({ facing, targetX, targetY }) => patchSnapshot({
           currentState: "Walking",
           facing,
+          targetX,
+          targetY,
+          zoomiesEndAt: void 0,
           stateEnteredAt: Date.now()
         }),
         onStep: ({ x, y }) => patchSnapshot({ x, y }, false),
@@ -1071,13 +1132,33 @@
         getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
         getFacing: () => snapshot?.facing ?? "left",
         getViewport: () => viewport(doc),
-        onDepart: ({ facing }) => patchSnapshot({
+        getResumeZoomies: () => {
+          if (!snapshot || snapshot.currentState !== "Walking") return void 0;
+          if (snapshot.zoomiesEndAt == null) return void 0;
+          if (typeof snapshot.targetX !== "number" || typeof snapshot.targetY !== "number") {
+            return void 0;
+          }
+          return {
+            target: { x: snapshot.targetX, y: snapshot.targetY },
+            endAt: snapshot.zoomiesEndAt
+          };
+        },
+        onZoomiesStart: ({ endAt }) => patchSnapshot({ zoomiesEndAt: endAt }, false),
+        onDepart: ({ facing, targetX, targetY }) => patchSnapshot({
           currentState: "Walking",
           facing,
+          targetX,
+          targetY,
           stateEnteredAt: Date.now()
         }),
         onStep: ({ x, y }) => patchSnapshot({ x, y }, false),
-        onArrive: ({ currentState, x, y }) => patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() }),
+        onArrive: ({ currentState, x, y }) => patchSnapshot({
+          currentState,
+          x,
+          y,
+          zoomiesEndAt: void 0,
+          stateEnteredAt: Date.now()
+        }),
         isNightVisiting: () => isNightVisiting(nightVisitUntil, Date.now())
       });
       stopNap = startNapLoop({

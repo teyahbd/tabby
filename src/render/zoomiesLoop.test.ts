@@ -228,6 +228,133 @@ test("startZoomiesLoop abandons a dash if the state changes mid-step (e.g. a dra
 	assert.ok(h.hasTimer);
 });
 
+test("startZoomiesLoop resumes an in-progress dash toward its stored target (Fix 5)", () => {
+	const h = harness();
+	let state: PetState = "Walking";
+	let pos = { x: 0, y: 0 };
+	let departed = false;
+	const arrivals: PetState[] = [];
+
+	startZoomiesLoop({
+		getState: () => state,
+		getPosition: () => pos,
+		getFacing: () => "left",
+		getViewport: () => ({ width: 1000, height: 800 }),
+		// endAt just barely in the future — the resumed session has only a
+		// moment left, so it should settle as soon as this one dash arrives.
+		getResumeZoomies: () => ({ target: { x: 500, y: 0 }, endAt: 1 }),
+		onDepart: () => {
+			departed = true;
+		},
+		onStep: (next) => {
+			pos = next;
+		},
+		onArrive: (next) => {
+			state = next.currentState;
+			pos = { x: next.x, y: next.y };
+			arrivals.push(next.currentState);
+		},
+		setTimer: h.setTimer,
+		clearTimer: h.clearTimer,
+		raf: h.raf,
+		cancelRaf: h.cancelRaf,
+		now: h.now,
+		nowMs: () => 0,
+		nowDate: day,
+		rng: () => 0.5,
+	});
+
+	assert.equal(
+		departed,
+		false,
+		"resuming a dash already in progress is not a fresh depart",
+	);
+	assert.ok(
+		h.hasFrame,
+		"should start dashing immediately, not wait on the delay timer",
+	);
+
+	for (let i = 0; i < 200 && h.hasFrame; i++) h.advance(100);
+
+	assert.deepEqual(pos, { x: 500, y: 0 });
+	assert.deepEqual(arrivals, ["IdleSit"]);
+});
+
+test("startZoomiesLoop settles to IdleSit immediately if the resumed session already expired", () => {
+	const h = harness();
+	let state: PetState = "Walking";
+	const pos = { x: 42, y: 7 };
+	const arrivals: PetState[] = [];
+
+	startZoomiesLoop({
+		getState: () => state,
+		getPosition: () => pos,
+		getFacing: () => "left",
+		getViewport: () => ({ width: 1000, height: 800 }),
+		getResumeZoomies: () => ({ target: { x: 500, y: 0 }, endAt: -1 }),
+		onDepart: () => {},
+		onStep: () => {},
+		onArrive: (next) => {
+			state = next.currentState;
+			arrivals.push(next.currentState);
+		},
+		setTimer: h.setTimer,
+		clearTimer: h.clearTimer,
+		raf: h.raf,
+		cancelRaf: h.cancelRaf,
+		now: h.now,
+		nowMs: () => 0,
+		nowDate: day,
+		rng: () => 0.5,
+	});
+
+	assert.equal(h.hasFrame, false);
+	assert.deepEqual(arrivals, ["IdleSit"]);
+	assert.ok(h.hasTimer, "resumes the normal delay timer afterward");
+});
+
+test("startZoomiesLoop persists the session end time once, not per dash", () => {
+	const h = harness();
+	let state: PetState = "IdleSit";
+	let starts = 0;
+	let lastEndAt: number | undefined;
+
+	startZoomiesLoop({
+		getState: () => state,
+		getPosition: () => ({ x: 0, y: 0 }),
+		getFacing: () => "left",
+		getViewport: () => ({ width: 1000, height: 800 }),
+		onZoomiesStart: ({ endAt }) => {
+			starts++;
+			lastEndAt = endAt;
+		},
+		onDepart: () => {
+			state = "Walking";
+		},
+		onStep: () => {},
+		onArrive: () => {},
+		setTimer: h.setTimer,
+		clearTimer: h.clearTimer,
+		raf: h.raf,
+		cancelRaf: h.cancelRaf,
+		now: h.now,
+		nowMs: () => 1_000,
+		nowDate: day,
+		rng: () => 0.5,
+	});
+
+	h.fireTimer();
+	assert.equal(starts, 1);
+	assert.equal(lastEndAt, 1_000 + zoomiesDurationMs(() => 0.5));
+
+	for (let i = 0; i < 2000 && h.hasFrame; i++) h.advance(50);
+	assert.equal(
+		starts,
+		1,
+		"still just the one start, even across several dashes",
+	);
+});
+
 test("stopping the zoomies loop cancels pending work", () => {
 	const h = harness();
 	const stop = startZoomiesLoop({

@@ -205,6 +205,78 @@ test("startWalkLoop abandons the walk if the state changes mid-step", () => {
 	assert.ok(h.hasTimer);
 });
 
+test("startWalkLoop resumes toward a stored target instead of waiting out the wander timer (Fix 5)", () => {
+	const h = harness();
+	let state: PetState = "Walking";
+	let facing: Facing = "left";
+	let pos = { x: 0, y: 0 };
+	let departed = false;
+	const arrivals: PetState[] = [];
+
+	startWalkLoop({
+		getState: () => state,
+		getPosition: () => pos,
+		getFacing: () => facing,
+		getViewport: () => ({ width: 1000, height: 800 }),
+		getResumeTarget: () => ({ x: 500, y: 300 }),
+		onDepart: () => {
+			departed = true;
+		},
+		onStep: (next) => {
+			pos = next;
+		},
+		onArrive: (next) => {
+			state = next.currentState;
+			pos = { x: next.x, y: next.y };
+			arrivals.push(next.currentState);
+		},
+		setTimer: h.setTimer,
+		clearTimer: h.clearTimer,
+		raf: h.raf,
+		cancelRaf: h.cancelRaf,
+		now: h.now,
+		rng: () => 0.5,
+	});
+
+	assert.equal(
+		departed,
+		false,
+		"resuming a walk already in progress is not a fresh depart",
+	);
+	assert.ok(
+		h.hasFrame,
+		"should start walking immediately, not wait on the wander timer",
+	);
+
+	for (let i = 0; i < 200 && h.hasFrame; i++) h.advance(100);
+
+	assert.equal(arrivals.length, 1);
+	assert.deepEqual(pos, { x: 500, y: 300 });
+});
+
+test("startWalkLoop ignores a stored target when not resuming a walk", () => {
+	const h = harness();
+	startWalkLoop({
+		getState: () => "IdleSit",
+		getPosition: () => ({ x: 0, y: 0 }),
+		getFacing: () => "left",
+		getViewport: () => ({ width: 1000, height: 800 }),
+		getResumeTarget: () => ({ x: 500, y: 300 }),
+		onDepart: () => {},
+		onStep: () => {},
+		onArrive: () => {},
+		setTimer: h.setTimer,
+		clearTimer: h.clearTimer,
+		raf: h.raf,
+		cancelRaf: h.cancelRaf,
+		now: h.now,
+		rng: () => 0.5,
+	});
+
+	assert.equal(h.hasFrame, false);
+	assert.ok(h.hasTimer, "falls back to the normal wander timer");
+});
+
 test("stopping the walk loop cancels pending work", () => {
 	const h = harness();
 	const stop = startWalkLoop({

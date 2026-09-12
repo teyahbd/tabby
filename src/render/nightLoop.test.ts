@@ -199,6 +199,24 @@ test("stopping the night loop mid-walk cancels pending work", () => {
 	assert.equal(s.h.hasTimer, false);
 });
 
+test("resuming mid-walk-home at night continues the walk instead of teleporting to bed (Fix 5)", () => {
+	const s = scene("ReturningToBase", night, { x: 500, y: 500 });
+	assert.deepEqual(s.events, ["depart"]);
+	assert.equal(s.state, "ReturningToBase");
+
+	for (let i = 0; i < 500 && s.h.hasFrame; i++) s.h.advance(100);
+
+	assert.deepEqual(s.events, ["depart", "sleep"]);
+	assert.deepEqual(s.position, basePosition(viewport));
+});
+
+test("resuming ReturningToBase after 7am just wakes up in place", () => {
+	const s = scene("ReturningToBase", morning, { x: 500, y: 500 });
+	assert.deepEqual(s.events, ["wake"]);
+	assert.equal(s.state, "IdleSit");
+	assert.ok(s.h.hasTimer);
+});
+
 test("morning wakes a sleeping pet to IdleSit", () => {
 	const s = scene("Sleeping", morning);
 	assert.deepEqual(s.events, ["wake"]);

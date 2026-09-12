@@ -57,7 +57,14 @@ export interface WalkLoopDeps {
 	getPosition: () => Point;
 	getFacing: () => Facing;
 	getViewport: () => Viewport;
-	onDepart: (next: { facing: Facing }) => void;
+	// A stored destination to resume toward on mount, in place of the usual
+	// wander-timer wait — see Fix 5 (walking resumes instead of collapsing).
+	getResumeTarget?: () => Point | undefined;
+	onDepart: (next: {
+		facing: Facing;
+		targetX: number;
+		targetY: number;
+	}) => void;
 	onStep: (pos: Point) => void;
 	onArrive: (next: { currentState: PetState; x: number; y: number }) => void;
 	setTimer?: (fn: () => void, ms: number) => number;
@@ -86,17 +93,7 @@ export function startWalkLoop(deps: WalkLoopDeps): () => void {
 		timerHandle = setTimer(depart, wanderDelayMs(rng));
 	};
 
-	const depart = () => {
-		timerHandle = null;
-		if (!isIdlePose(deps.getState())) {
-			arm();
-			return;
-		}
-
-		const start = deps.getPosition();
-		const dest = pickDestination(deps.getViewport(), rng);
-		deps.onDepart({ facing: facingFor(start.x, dest.x, deps.getFacing()) });
-
+	const walkTo = (dest: Point) => {
 		let last = now();
 		const frame = (t: number) => {
 			if (deps.getState() !== "Walking") {
@@ -122,7 +119,29 @@ export function startWalkLoop(deps: WalkLoopDeps): () => void {
 		rafHandle = raf(frame);
 	};
 
-	arm();
+	const depart = () => {
+		timerHandle = null;
+		if (!isIdlePose(deps.getState())) {
+			arm();
+			return;
+		}
+
+		const start = deps.getPosition();
+		const dest = pickDestination(deps.getViewport(), rng);
+		deps.onDepart({
+			facing: facingFor(start.x, dest.x, deps.getFacing()),
+			targetX: dest.x,
+			targetY: dest.y,
+		});
+		walkTo(dest);
+	};
+
+	const resumeTarget = deps.getResumeTarget?.();
+	if (resumeTarget && deps.getState() === "Walking") {
+		walkTo(resumeTarget);
+	} else {
+		arm();
+	}
 
 	return () => {
 		if (timerHandle != null) clearTimer(timerHandle);
