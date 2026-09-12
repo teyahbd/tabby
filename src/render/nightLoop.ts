@@ -54,9 +54,9 @@ export function startNightLoop(deps: NightLoopDeps): () => void {
 	};
 
 	const startReturn = () => {
-		const base = basePosition(deps.getViewport());
+		const base = () => basePosition(deps.getViewport());
 		deps.onReturnDepart({
-			facing: facingFor(deps.getPosition().x, base.x, deps.getFacing()),
+			facing: facingFor(deps.getPosition().x, base().x, deps.getFacing()),
 		});
 
 		let last = now();
@@ -66,11 +66,12 @@ export function startNightLoop(deps: NightLoopDeps): () => void {
 				arm();
 				return;
 			}
-			const step = walkStep(deps.getPosition(), base, t - last);
+			const target = base();
+			const step = walkStep(deps.getPosition(), target, t - last);
 			last = t;
 			if (step.arrived) {
 				rafHandle = null;
-				deps.onSleep({ x: base.x, y: base.y });
+				deps.onSleep({ x: target.x, y: target.y });
 				arm();
 				return;
 			}

@@ -131,7 +131,7 @@
 }
 
 #tabby-root[data-state="AtBase"] #tabby-sprite {
-	background-position: 0 calc(var(--cell) * -3);
+	animation: tabby-lie 4s steps(4) infinite alternate;
 }
 
 #tabby-root[data-state="Eating"]:not([data-approaching="true"]) #tabby-sprite {

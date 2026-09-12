@@ -455,7 +455,7 @@
     "ReturningToBase",
     "AtBase"
   ]);
-  var BED_SNAP_RADIUS = PET_SIZE * 1.5;
+  var BED_SNAP_RADIUS = PET_SIZE * 0.45;
   var DRAG_THRESHOLD_PX = 4;
   function canGrab(state) {
     return DRAG_START_STATES.has(state);
@@ -507,11 +507,10 @@
       moveTarget.removeEventListener("pointerup", onUp);
       moveTarget.removeEventListener("pointercancel", onUp);
       if (!wasGrabbed) return;
-      deps.onDrop({
-        currentState: dropState(pos, deps.getViewport()),
-        x: pos.x,
-        y: pos.y
-      });
+      const viewport2 = deps.getViewport();
+      const currentState = dropState(pos, viewport2);
+      const settled = currentState === "AtBase" ? basePosition(viewport2) : pos;
+      deps.onDrop({ currentState, x: settled.x, y: settled.y });
     };
     const onDown = (event) => {
       const e = event;
@@ -623,9 +622,9 @@
       timerHandle = setTimer(check, NIGHT_CHECK_MS);
     };
     const startReturn = () => {
-      const base = basePosition(deps.getViewport());
+      const base = () => basePosition(deps.getViewport());
       deps.onReturnDepart({
-        facing: facingFor(deps.getPosition().x, base.x, deps.getFacing())
+        facing: facingFor(deps.getPosition().x, base().x, deps.getFacing())
       });
       let last = now();
       const frame = (t) => {
@@ -634,11 +633,12 @@
           arm();
           return;
         }
-        const step = walkStep(deps.getPosition(), base, t - last);
+        const target = base();
+        const step = walkStep(deps.getPosition(), target, t - last);
         last = t;
         if (step.arrived) {
           rafHandle = null;
-          deps.onSleep({ x: base.x, y: base.y });
+          deps.onSleep({ x: target.x, y: target.y });
           arm();
           return;
         }

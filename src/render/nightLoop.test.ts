@@ -60,7 +60,12 @@ const night = () => new Date(2026, 8, 6, 23, 0);
 const morning = () => new Date(2026, 8, 6, 8, 0);
 const nowDateRef = { value: morning() };
 
-function scene(state: PetState, nowDate: () => Date, pos = { x: 100, y: 100 }) {
+function scene(
+	state: PetState,
+	nowDate: () => Date,
+	pos = { x: 100, y: 100 },
+	getViewport: () => typeof viewport = () => viewport,
+) {
 	const h = harness();
 	let current = state;
 	let facing: Facing = "right";
@@ -71,7 +76,7 @@ function scene(state: PetState, nowDate: () => Date, pos = { x: 100, y: 100 }) {
 		getState: () => current,
 		getPosition: () => position,
 		getFacing: () => facing,
-		getViewport: () => viewport,
+		getViewport,
 		onReturnDepart: (next) => {
 			current = "ReturningToBase";
 			facing = next.facing;
@@ -136,6 +141,28 @@ test("nightfall while running walks the pet back to base and sleeps", () => {
 	assert.deepEqual(s.events, ["depart", "sleep"]);
 	assert.deepEqual(s.position, basePosition(viewport));
 	assert.ok(s.h.hasTimer);
+});
+
+test("resizing mid-walk retargets to the bed's new corner, not the stale one", () => {
+	nowDateRef.value = morning();
+	let currentViewport = viewport;
+	const s = scene(
+		"IdleSit",
+		() => nowDateRef.value,
+		{ x: 100, y: 100 },
+		() => currentViewport,
+	);
+	nowDateRef.value = night();
+	s.h.fireTimer();
+	s.h.advance(100);
+	assert.equal(s.h.hasFrame, true);
+
+	currentViewport = { width: 1400, height: 900 };
+	for (let i = 0; i < 500 && s.h.hasFrame; i++) s.h.advance(100);
+
+	assert.deepEqual(s.events, ["depart", "sleep"]);
+	assert.deepEqual(s.position, basePosition(currentViewport));
+	assert.notDeepEqual(s.position, basePosition(viewport));
 });
 
 test("night with the pet already at base sleeps in place", () => {

@@ -179,6 +179,30 @@ test("dropping near the bed settles into AtBase", () => {
 	assert.ok(h.events.includes("drop:AtBase"));
 });
 
+test("dropping near the bed snaps to the exact base position, not the drop point", () => {
+	const h = harness();
+	const base = basePosition(VIEWPORT);
+	h.sprite.emit({
+		type: "pointerdown",
+		clientX: 0,
+		clientY: 0,
+		isPrimary: true,
+	});
+	h.moveTarget.emit({
+		type: "pointermove",
+		clientX: base.x - 100 + 5,
+		clientY: base.y - 100,
+	});
+	h.moveTarget.emit({
+		type: "pointerup",
+		clientX: base.x - 100 + 5,
+		clientY: base.y - 100,
+	});
+
+	assert.equal(h.getState(), "AtBase");
+	assert.deepEqual(h.getPos(), base);
+});
+
 test("a grab is ignored from a non-grabbable state", () => {
 	const h = harness("Sleeping");
 	h.sprite.emit({

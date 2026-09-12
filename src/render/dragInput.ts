@@ -16,7 +16,7 @@ export const DRAG_START_STATES: ReadonlySet<PetState> = new Set<PetState>([
 	"AtBase",
 ]);
 
-export const BED_SNAP_RADIUS = PET_SIZE * 1.5;
+export const BED_SNAP_RADIUS = PET_SIZE * 0.45;
 export const DRAG_THRESHOLD_PX = 4;
 
 export function canGrab(state: PetState): boolean {
@@ -97,11 +97,10 @@ export function startDragInput(deps: DragInputDeps): () => void {
 		moveTarget.removeEventListener("pointerup", onUp);
 		moveTarget.removeEventListener("pointercancel", onUp);
 		if (!wasGrabbed) return;
-		deps.onDrop({
-			currentState: dropState(pos, deps.getViewport()),
-			x: pos.x,
-			y: pos.y,
-		});
+		const viewport = deps.getViewport();
+		const currentState = dropState(pos, viewport);
+		const settled = currentState === "AtBase" ? basePosition(viewport) : pos;
+		deps.onDrop({ currentState, x: settled.x, y: settled.y });
 	};
 
 	const onDown = (event: Event) => {
