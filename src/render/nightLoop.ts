@@ -25,6 +25,7 @@ export interface NightLoopDeps {
 	onReturnStep: (pos: Point) => void;
 	onSleep: (pos: Point) => void;
 	onWake: () => void;
+	isNightVisiting?: () => boolean;
 	setTimer?: (fn: () => void, ms: number) => number;
 	clearTimer?: (handle: number) => void;
 	raf?: (fn: (t: number) => void) => number;
@@ -87,6 +88,11 @@ export function startNightLoop(deps: NightLoopDeps): () => void {
 
 		if (!isNight(nowDate())) {
 			if (state === "Sleeping") deps.onWake();
+			arm();
+			return;
+		}
+
+		if (deps.isNightVisiting?.()) {
 			arm();
 			return;
 		}

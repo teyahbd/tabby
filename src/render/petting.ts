@@ -17,6 +17,7 @@ export interface PettingDeps {
 	sprite: EventTarget;
 	getState: () => PetState;
 	onPet: () => void;
+	onWakeForNightVisit?: () => void;
 }
 
 export function startPetting(deps: PettingDeps): () => void {
@@ -39,7 +40,12 @@ export function startPetting(deps: PettingDeps): () => void {
 		) {
 			return;
 		}
-		if (!canPet(deps.getState())) return;
+		const state = deps.getState();
+		if (state === "Sleeping") {
+			deps.onWakeForNightVisit?.();
+			return;
+		}
+		if (!canPet(state)) return;
 		deps.onPet();
 	};
 

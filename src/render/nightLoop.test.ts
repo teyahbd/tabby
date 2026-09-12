@@ -197,6 +197,60 @@ test("Eating and Dragged are left undisturbed at night", () => {
 	}
 });
 
+test("night is suppressed while on a night visit, then resumes once the window ends", () => {
+	nowDateRef.value = night();
+	const h = harness();
+	let current: PetState = "IdleSit";
+	let facing: Facing = "right";
+	let position = { x: 100, y: 100 };
+	let nightVisiting = true;
+	const events: string[] = [];
+
+	startNightLoop({
+		getState: () => current,
+		getPosition: () => position,
+		getFacing: () => facing,
+		getViewport: () => viewport,
+		onReturnDepart: (next) => {
+			current = "ReturningToBase";
+			facing = next.facing;
+			events.push("depart");
+		},
+		onReturnStep: (next) => {
+			position = next;
+		},
+		onSleep: (next) => {
+			current = "Sleeping";
+			position = next;
+			events.push("sleep");
+		},
+		onWake: () => {
+			current = "IdleSit";
+			events.push("wake");
+		},
+		isNightVisiting: () => nightVisiting,
+		setTimer: h.setTimer,
+		clearTimer: h.clearTimer,
+		raf: h.raf,
+		cancelRaf: h.cancelRaf,
+		now: h.now,
+		nowDate: () => nowDateRef.value,
+	});
+
+	assert.deepEqual(events, []);
+	assert.equal(current, "IdleSit");
+
+	h.fireTimer();
+	assert.deepEqual(events, []);
+	assert.equal(current, "IdleSit");
+
+	nightVisiting = false;
+	h.fireTimer();
+	assert.deepEqual(events, ["depart"]);
+	for (let i = 0; i < 500 && h.hasFrame; i++) h.advance(100);
+	assert.deepEqual(events, ["depart", "sleep"]);
+});
+
 test("stopping the night loop cancels pending work", () => {
 	const s = scene("IdleSit", night);
 	assert.equal(s.state, "Sleeping");

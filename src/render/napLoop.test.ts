@@ -153,6 +153,27 @@ test("startNapLoop does not nap at night", () => {
 	assert.ok(h.hasTimer);
 });
 
+test("startNapLoop naps at night while on a night visit", () => {
+	const h = harness();
+	let napped = false;
+
+	startNapLoop({
+		getState: () => "IdleSit",
+		onNap: () => {
+			napped = true;
+		},
+		onWake: () => {},
+		setTimer: h.setTimer,
+		clearTimer: h.clearTimer,
+		now: () => new Date(2026, 8, 6, 23, 0),
+		rng: () => 0,
+		isNightVisiting: () => true,
+	});
+
+	h.fire();
+	assert.equal(napped, true);
+});
+
 test("stopping the nap loop cancels the pending timer", () => {
 	const h = harness();
 	const stop = startNapLoop({

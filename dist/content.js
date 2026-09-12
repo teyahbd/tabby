@@ -531,6 +531,13 @@
     };
   }
 
+  // src/render/nightVisit.ts
+  var NIGHT_VISIT_KEY = "nightVisitUntil";
+  var NIGHT_VISIT_DURATION_MS = 60 * 60 * 1e3;
+  function isNightVisiting(until, now) {
+    return until !== null && now < until;
+  }
+
   // src/render/napLoop.ts
   var NAP_CHECK_MIN_MS = 6e4;
   var NAP_CHECK_MAX_MS = 12e4;
@@ -566,7 +573,8 @@
     };
     const check = () => {
       handle = null;
-      if (shouldNap(deps.getState(), isDaytime(now()), rng)) {
+      const daytime = isDaytime(now()) || (deps.isNightVisiting?.() ?? false);
+      if (shouldNap(deps.getState(), daytime, rng)) {
         deps.onNap();
         handle = setTimer(wake, napDurationMs(rng));
         return;
@@ -644,6 +652,10 @@
         arm();
         return;
       }
+      if (deps.isNightVisiting?.()) {
+        arm();
+        return;
+      }
       if (state === "AtBase") {
         deps.onSleep(deps.getPosition());
       } else if (RETURN_START_STATES.has(state)) {
@@ -691,7 +703,12 @@
       if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > PET_MOVE_TOLERANCE_PX) {
         return;
       }
-      if (!canPet(deps.getState())) return;
+      const state = deps.getState();
+      if (state === "Sleeping") {
+        deps.onWakeForNightVisit?.();
+        return;
+      }
+      if (!canPet(state)) return;
       deps.onPet();
     };
     deps.sprite.addEventListener("pointerdown", onDown);
@@ -856,6 +873,7 @@
     let stopHunger = null;
     let unsubHunger = null;
     let hunger = DEFAULT_HUNGER;
+    let nightVisitUntil = null;
     const render = () => {
       if (!snapshot) return;
       root.style.transform = `translate(${snapshot.x}px, ${snapshot.y}px)`;
@@ -887,6 +905,8 @@
       if (JSON.stringify(saved) !== JSON.stringify(resumed)) {
         await storage2.set(PET_STATE_KEY, resumed);
       }
+      nightVisitUntil = await storage2.get(NIGHT_VISIT_KEY);
+      if (disposed) return;
       stopIdle = startIdleLoop({
         getState: () => snapshot?.currentState ?? "IdleSit",
         onFlip: ({ currentState, facing }) => patchSnapshot({ currentState, facing, stateEnteredAt: Date.now() })
@@ -913,7 +933,8 @@
         onWake: () => patchSnapshot({
           currentState: "IdleSit",
           stateEnteredAt: Date.now()
-        })
+        }),
+        isNightVisiting: () => isNightVisiting(nightVisitUntil, Date.now())
       });
       stopNight = startNightLoop({
         getState: () => snapshot?.currentState ?? "IdleSit",
@@ -935,7 +956,8 @@
         onWake: () => patchSnapshot({
           currentState: "IdleSit",
           stateEnteredAt: Date.now()
-        })
+        }),
+        isNightVisiting: () => isNightVisiting(nightVisitUntil, Date.now())
       });
       stopDrag = startDragInput({
         sprite,
@@ -953,7 +975,18 @@
       stopPetting = startPetting({
         sprite,
         getState: () => snapshot?.currentState ?? "IdleSit",
-        onPet: () => reactToPet(root, doc)
+        onPet: () => reactToPet(root, doc),
+        onWakeForNightVisit: () => {
+          const base = basePosition(viewport(doc));
+          patchSnapshot({
+            currentState: "IdleSit",
+            x: base.x,
+            y: base.y,
+            stateEnteredAt: Date.now()
+          });
+          nightVisitUntil = Date.now() + NIGHT_VISIT_DURATION_MS;
+          void storage2.set(NIGHT_VISIT_KEY, nightVisitUntil);
+        }
       });
       const savedHunger = await storage2.get(HUNGER_KEY);
       if (disposed) return;

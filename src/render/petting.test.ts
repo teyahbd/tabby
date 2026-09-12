@@ -88,6 +88,46 @@ test("clicks in suppressed states are ignored", () => {
 	assert.equal(h.pets, 0);
 });
 
+test("a click while Sleeping triggers a night visit instead of a pet", () => {
+	const sprite = fakeTarget();
+	let pets = 0;
+	let wakes = 0;
+	startPetting({
+		sprite: sprite as unknown as EventTarget,
+		getState: () => "Sleeping",
+		onPet: () => {
+			pets++;
+		},
+		onWakeForNightVisit: () => {
+			wakes++;
+		},
+	});
+
+	sprite.emit({ type: "pointerdown", clientX: 10, clientY: 10 });
+	sprite.emit({ type: "click", clientX: 10, clientY: 10 });
+
+	assert.equal(wakes, 1);
+	assert.equal(pets, 0);
+});
+
+test("a drag past the tolerance while Sleeping does not trigger a night visit", () => {
+	const sprite = fakeTarget();
+	let wakes = 0;
+	startPetting({
+		sprite: sprite as unknown as EventTarget,
+		getState: () => "Sleeping",
+		onPet: () => {},
+		onWakeForNightVisit: () => {
+			wakes++;
+		},
+	});
+
+	sprite.emit({ type: "pointerdown", clientX: 10, clientY: 10 });
+	sprite.emit({ type: "click", clientX: 40, clientY: 40 });
+
+	assert.equal(wakes, 0);
+});
+
 test("secondary-button presses never arm a pet", () => {
 	const h = harness();
 	h.sprite.emit({ type: "pointerdown", clientX: 10, clientY: 10, button: 2 });

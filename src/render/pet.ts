@@ -3,6 +3,11 @@ import { mountBed } from "./bed.ts";
 import { mountBowl } from "./bowl.ts";
 import { startDragInput } from "./dragInput.ts";
 import {
+	NIGHT_VISIT_DURATION_MS,
+	NIGHT_VISIT_KEY,
+	isNightVisiting,
+} from "./nightVisit.ts";
+import {
 	catchUpAwayMeal,
 	DEFAULT_HUNGER,
 	HUNGER_KEY,
@@ -11,6 +16,7 @@ import {
 	startHungerLoop,
 } from "./hungerLoop.ts";
 import { startIdleLoop } from "./idleLoop.ts";
+import { basePosition } from "./layout.ts";
 import { startNapLoop } from "./napLoop.ts";
 import { startNightLoop } from "./nightLoop.ts";
 import { startPetting } from "./petting.ts";
@@ -69,6 +75,7 @@ export function mountPet(
 	let stopHunger: (() => void) | null = null;
 	let unsubHunger: (() => void) | null = null;
 	let hunger: HungerState = DEFAULT_HUNGER;
+	let nightVisitUntil: number | null = null;
 
 	const render = () => {
 		if (!snapshot) return;
@@ -106,6 +113,9 @@ export function mountPet(
 			await storage.set(PET_STATE_KEY, resumed);
 		}
 
+		nightVisitUntil = await storage.get<number | null>(NIGHT_VISIT_KEY);
+		if (disposed) return;
+
 		stopIdle = startIdleLoop({
 			getState: () => snapshot?.currentState ?? "IdleSit",
 			onFlip: ({ currentState, facing }) =>
@@ -140,6 +150,7 @@ export function mountPet(
 					currentState: "IdleSit",
 					stateEnteredAt: Date.now(),
 				}),
+			isNightVisiting: () => isNightVisiting(nightVisitUntil, Date.now()),
 		});
 
 		stopNight = startNightLoop({
@@ -166,6 +177,7 @@ export function mountPet(
 					currentState: "IdleSit",
 					stateEnteredAt: Date.now(),
 				}),
+			isNightVisiting: () => isNightVisiting(nightVisitUntil, Date.now()),
 		});
 
 		stopDrag = startDragInput({
@@ -188,6 +200,17 @@ export function mountPet(
 			sprite,
 			getState: () => snapshot?.currentState ?? "IdleSit",
 			onPet: () => reactToPet(root, doc),
+			onWakeForNightVisit: () => {
+				const base = basePosition(viewport(doc));
+				patchSnapshot({
+					currentState: "IdleSit",
+					x: base.x,
+					y: base.y,
+					stateEnteredAt: Date.now(),
+				});
+				nightVisitUntil = Date.now() + NIGHT_VISIT_DURATION_MS;
+				void storage.set<number>(NIGHT_VISIT_KEY, nightVisitUntil);
+			},
 		});
 
 		const savedHunger = await storage.get<unknown>(HUNGER_KEY);

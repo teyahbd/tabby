@@ -39,6 +39,7 @@ export interface NapLoopDeps {
 	getState: () => PetState;
 	onNap: () => void;
 	onWake: () => void;
+	isNightVisiting?: () => boolean;
 	setTimer?: (fn: () => void, ms: number) => number;
 	clearTimer?: (handle: number) => void;
 	now?: () => Date;
@@ -60,7 +61,8 @@ export function startNapLoop(deps: NapLoopDeps): () => void {
 
 	const check = () => {
 		handle = null;
-		if (shouldNap(deps.getState(), isDaytime(now()), rng)) {
+		const daytime = isDaytime(now()) || (deps.isNightVisiting?.() ?? false);
+		if (shouldNap(deps.getState(), daytime, rng)) {
 			deps.onNap();
 			handle = setTimer(wake, napDurationMs(rng));
 			return;
