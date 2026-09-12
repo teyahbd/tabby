@@ -31,7 +31,6 @@ test("bed is pinned bottom-right with the same inset as the pet", () => {
 		x: view.width - BED_WIDTH - BASE_MARGIN,
 		y: view.height - BED_HEIGHT - BASE_MARGIN,
 	});
-	// bottom edge lines up with the pet's floor
 	assert.equal(bed.y + BED_HEIGHT, basePosition(view).y + PET_SIZE);
 	assert.equal(bed.x, Math.round(bed.x));
 	assert.equal(bed.y, Math.round(bed.y));
@@ -45,7 +44,6 @@ test("name label overlaps the bed near the bottom, clear of the last rows", () =
 		x: bed.x,
 		y: bed.y + BED_HEIGHT - BED_LABEL_BOTTOM_INSET - BED_LABEL_LINE_HEIGHT,
 	});
-	// label box bottom stays above the bed's bottom edge (overlap, not below it)
 	assert.ok(label.y + BED_LABEL_LINE_HEIGHT <= bed.y + BED_HEIGHT);
 	assert.equal(label.y, Math.round(label.y));
 });
