@@ -781,6 +781,7 @@
   var MEOW_VOLUME = 0.2;
   var audioContext = null;
   var decodedClips = /* @__PURE__ */ new Map();
+  var currentSource = null;
   function getAudioContext() {
     const Ctor = globalThis.AudioContext ?? globalThis.webkitAudioContext;
     if (!Ctor) return null;
@@ -811,11 +812,21 @@
     const bytes = MEOW_CLIPS[index];
     if (!bytes) return;
     const start = (buffer) => {
+      if (currentSource) {
+        try {
+          currentSource.stop();
+        } catch {
+        }
+      }
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       const gain = ctx.createGain();
       gain.gain.value = MEOW_VOLUME;
       source.connect(gain).connect(ctx.destination);
+      source.onended = () => {
+        if (currentSource === source) currentSource = null;
+      };
+      currentSource = source;
       source.start();
     };
     const cached = decodedClips.get(index);

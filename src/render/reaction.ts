@@ -10,6 +10,7 @@ const MEOW_VOLUME = 0.2;
 
 let audioContext: AudioContext | null = null;
 const decodedClips = new Map<number, AudioBuffer>();
+let currentSource: AudioBufferSourceNode | null = null;
 
 function getAudioContext(): AudioContext | null {
 	const Ctor =
@@ -51,11 +52,20 @@ export function playMeow(rng: () => number = Math.random): void {
 	if (!bytes) return;
 
 	const start = (buffer: AudioBuffer) => {
+		if (currentSource) {
+			try {
+				currentSource.stop();
+			} catch {}
+		}
 		const source = ctx.createBufferSource();
 		source.buffer = buffer;
 		const gain = ctx.createGain();
 		gain.gain.value = MEOW_VOLUME;
 		source.connect(gain).connect(ctx.destination);
+		source.onended = () => {
+			if (currentSource === source) currentSource = null;
+		};
+		currentSource = source;
 		source.start();
 	};
 
