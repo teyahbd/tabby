@@ -754,8 +754,10 @@
   }
   function resumeSnapshot(saved, viewport2, now = Date.now()) {
     if (!isPetSnapshot(saved)) return initialSnapshot(viewport2, now);
-    if (isStable(saved.currentState)) return saved;
-    return { ...saved, currentState: "IdleSit", stateEnteredAt: now };
+    const resumed = isStable(saved.currentState) ? saved : { ...saved, currentState: "IdleSit", stateEnteredAt: now };
+    const pos = clampPoint({ x: resumed.x, y: resumed.y }, viewport2);
+    if (pos.x === resumed.x && pos.y === resumed.y) return resumed;
+    return { ...resumed, x: pos.x, y: pos.y };
   }
   var RESTING_ANCHORS = {
     AtBase: basePosition,

@@ -43,6 +43,44 @@ test("stable states resume exactly as saved", () => {
 	}
 });
 
+test("resume clamps a saved position that's now off-screen (Fix 3)", () => {
+	// Simulates reloading the extension into a smaller page than the one the
+	// position was last saved against.
+	const small = { width: 500, height: 400 };
+	for (const currentState of ["IdleSit", "Napping", "AtBase"] as const) {
+		const saved = {
+			x: 900,
+			y: 700,
+			facing: "left" as const,
+			currentState,
+			stateEnteredAt: 1,
+		};
+		const resumed = resumeSnapshot(saved, small, 999);
+		assert.deepEqual(
+			{ x: resumed.x, y: resumed.y },
+			{ x: small.width - PET_SIZE, y: small.height - PET_SIZE },
+		);
+		assert.equal(resumed.currentState, currentState);
+	}
+
+	// Eating clamps back on screen too, but keeps its saved spot rather than
+	// jumping straight to the bowl — hungerLoop's resume walk still needs a
+	// real starting position to walk from.
+	const eating = {
+		x: 900,
+		y: 700,
+		facing: "left" as const,
+		currentState: "Eating" as const,
+		stateEnteredAt: 1,
+	};
+	const resumedEating = resumeSnapshot(eating, small, 999);
+	assert.deepEqual(
+		{ x: resumedEating.x, y: resumedEating.y },
+		{ x: small.width - PET_SIZE, y: small.height - PET_SIZE },
+	);
+	assert.equal(resumedEating.currentState, "Eating");
+});
+
 test("transient states collapse to IdleSit at the saved position", () => {
 	for (const currentState of [
 		"Walking",

@@ -74,8 +74,17 @@ export function resumeSnapshot(
 	now: number = Date.now(),
 ): PetSnapshot {
 	if (!isPetSnapshot(saved)) return initialSnapshot(viewport, now);
-	if (isStable(saved.currentState)) return saved;
-	return { ...saved, currentState: "IdleSit", stateEnteredAt: now };
+	const resumed = isStable(saved.currentState)
+		? saved
+		: { ...saved, currentState: "IdleSit" as const, stateEnteredAt: now };
+	// A saved position can predate the current viewport (e.g. the extension
+	// was reloaded into a smaller page than it last saved against) — pull it
+	// back on screen the same way a live resize would, without re-anchoring
+	// resting states to their canonical spot (that would break Eating's
+	// walk-back-to-the-bowl resume).
+	const pos = clampPoint({ x: resumed.x, y: resumed.y }, viewport);
+	if (pos.x === resumed.x && pos.y === resumed.y) return resumed;
+	return { ...resumed, x: pos.x, y: pos.y };
 }
 
 const RESTING_ANCHORS: Partial<
