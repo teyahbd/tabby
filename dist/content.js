@@ -863,6 +863,102 @@
     playMeow(rng);
   }
 
+  // src/render/zoomiesLoop.ts
+  var ZOOMIES_MIN_MS = 35 * 6e4;
+  var ZOOMIES_MAX_MS = 90 * 6e4;
+  var ZOOMIES_HARD_FLOOR_MS = 20 * 6e4;
+  var ZOOMIES_DURATION_MIN_MS = 2e4;
+  var ZOOMIES_DURATION_MAX_MS = 3e4;
+  var ZOOMIES_SPEED_MULTIPLIER = 2.5;
+  var ZOOMIES_SUPPRESSED_STATES = /* @__PURE__ */ new Set([
+    "Napping",
+    "Sleeping",
+    "Eating",
+    "Dragged",
+    "ReturningToBase"
+  ]);
+  function zoomiesDelayMs(rng = Math.random) {
+    const delay = ZOOMIES_MIN_MS + Math.floor(rng() * (ZOOMIES_MAX_MS - ZOOMIES_MIN_MS));
+    return Math.max(delay, ZOOMIES_HARD_FLOOR_MS);
+  }
+  function zoomiesDurationMs(rng = Math.random) {
+    return ZOOMIES_DURATION_MIN_MS + Math.floor(rng() * (ZOOMIES_DURATION_MAX_MS - ZOOMIES_DURATION_MIN_MS));
+  }
+  function zoomiesSpeed() {
+    return WALK_SPEED_PX_PER_S * ZOOMIES_SPEED_MULTIPLIER;
+  }
+  function shouldStartZoomies(state, daytime) {
+    return daytime && !ZOOMIES_SUPPRESSED_STATES.has(state);
+  }
+  function startZoomiesLoop(deps) {
+    const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+    const clearTimer = deps.clearTimer ?? ((handle) => clearTimeout(handle));
+    const raf = deps.raf ?? ((fn) => requestAnimationFrame(fn));
+    const cancelRaf = deps.cancelRaf ?? ((handle) => cancelAnimationFrame(handle));
+    const now = deps.now ?? (() => performance.now());
+    const nowDate = deps.nowDate ?? (() => /* @__PURE__ */ new Date());
+    const rng = deps.rng ?? Math.random;
+    let timerHandle = null;
+    let rafHandle = null;
+    const arm = () => {
+      timerHandle = setTimer(check, zoomiesDelayMs(rng));
+    };
+    const check = () => {
+      timerHandle = null;
+      const daytime = isDaytime(nowDate()) || (deps.isNightVisiting?.() ?? false);
+      if (!shouldStartZoomies(deps.getState(), daytime)) {
+        arm();
+        return;
+      }
+      run();
+    };
+    const run = () => {
+      const speed = zoomiesSpeed();
+      const endAt = now() + zoomiesDurationMs(rng);
+      const start = deps.getPosition();
+      let dest = pickDestination(deps.getViewport(), rng);
+      deps.onDepart({ facing: facingFor(start.x, dest.x, deps.getFacing()) });
+      let last = now();
+      const frame = (t) => {
+        if (deps.getState() !== "Walking") {
+          rafHandle = null;
+          arm();
+          return;
+        }
+        const step = walkStep(deps.getPosition(), dest, t - last, speed);
+        last = t;
+        if (step.arrived) {
+          if (t >= endAt) {
+            rafHandle = null;
+            deps.onArrive({
+              currentState: "IdleSit",
+              x: step.x,
+              y: step.y
+            });
+            arm();
+            return;
+          }
+          const from = { x: step.x, y: step.y };
+          dest = pickDestination(deps.getViewport(), rng);
+          deps.onStep(from);
+          deps.onDepart({ facing: facingFor(from.x, dest.x, deps.getFacing()) });
+          rafHandle = raf(frame);
+          return;
+        }
+        deps.onStep({ x: step.x, y: step.y });
+        rafHandle = raf(frame);
+      };
+      rafHandle = raf(frame);
+    };
+    arm();
+    return () => {
+      if (timerHandle != null) clearTimer(timerHandle);
+      if (rafHandle != null) cancelRaf(rafHandle);
+      timerHandle = null;
+      rafHandle = null;
+    };
+  }
+
   // src/render/pet.ts
   var ROOT_ID = "tabby-root";
   var CRUMB_INTERVAL_MS = 1200;
@@ -896,6 +992,7 @@
     let disposed = false;
     let stopIdle = null;
     let stopWalk = null;
+    let stopZoomies = null;
     let stopNap = null;
     let stopNight = null;
     let stopDrag = null;
@@ -968,6 +1065,20 @@
         }),
         onStep: ({ x, y }) => patchSnapshot({ x, y }, false),
         onArrive: ({ currentState, x, y }) => patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() })
+      });
+      stopZoomies = startZoomiesLoop({
+        getState: () => snapshot?.currentState ?? "IdleSit",
+        getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
+        getFacing: () => snapshot?.facing ?? "left",
+        getViewport: () => viewport(doc),
+        onDepart: ({ facing }) => patchSnapshot({
+          currentState: "Walking",
+          facing,
+          stateEnteredAt: Date.now()
+        }),
+        onStep: ({ x, y }) => patchSnapshot({ x, y }, false),
+        onArrive: ({ currentState, x, y }) => patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() }),
+        isNightVisiting: () => isNightVisiting(nightVisitUntil, Date.now())
       });
       stopNap = startNapLoop({
         getState: () => snapshot?.currentState ?? "IdleSit",
@@ -1097,6 +1208,7 @@
       view?.removeEventListener("resize", onResize);
       stopIdle?.();
       stopWalk?.();
+      stopZoomies?.();
       stopNap?.();
       stopNight?.();
       stopDrag?.();

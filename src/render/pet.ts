@@ -28,6 +28,7 @@ import {
 } from "./petState.ts";
 import { reactToPet, spawnCrumbs } from "./reaction.ts";
 import { startWalkLoop } from "./walkLoop.ts";
+import { startZoomiesLoop } from "./zoomiesLoop.ts";
 
 const ROOT_ID = "tabby-root";
 const CRUMB_INTERVAL_MS = 1_200;
@@ -69,6 +70,7 @@ export function mountPet(
 	let disposed = false;
 	let stopIdle: (() => void) | null = null;
 	let stopWalk: (() => void) | null = null;
+	let stopZoomies: (() => void) | null = null;
 	let stopNap: (() => void) | null = null;
 	let stopNight: (() => void) | null = null;
 	let stopDrag: (() => void) | null = null;
@@ -154,6 +156,23 @@ export function mountPet(
 			onStep: ({ x, y }) => patchSnapshot({ x, y }, false),
 			onArrive: ({ currentState, x, y }) =>
 				patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() }),
+		});
+
+		stopZoomies = startZoomiesLoop({
+			getState: () => snapshot?.currentState ?? "IdleSit",
+			getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
+			getFacing: () => snapshot?.facing ?? "left",
+			getViewport: () => viewport(doc),
+			onDepart: ({ facing }) =>
+				patchSnapshot({
+					currentState: "Walking",
+					facing,
+					stateEnteredAt: Date.now(),
+				}),
+			onStep: ({ x, y }) => patchSnapshot({ x, y }, false),
+			onArrive: ({ currentState, x, y }) =>
+				patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() }),
+			isNightVisiting: () => isNightVisiting(nightVisitUntil, Date.now()),
 		});
 
 		stopNap = startNapLoop({
@@ -305,6 +324,7 @@ export function mountPet(
 		view?.removeEventListener("resize", onResize);
 		stopIdle?.();
 		stopWalk?.();
+		stopZoomies?.();
 		stopNap?.();
 		stopNight?.();
 		stopDrag?.();
