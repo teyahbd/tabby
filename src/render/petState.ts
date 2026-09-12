@@ -1,6 +1,6 @@
 import {
 	basePosition,
-	bowlFeedSpot,
+	eatingSpot,
 	clampPoint,
 	type Point,
 	type Viewport,
@@ -83,7 +83,7 @@ const RESTING_ANCHORS: Partial<
 > = {
 	AtBase: basePosition,
 	Sleeping: basePosition,
-	Eating: bowlFeedSpot,
+	Eating: eatingSpot,
 };
 
 export function repositionOnResize(

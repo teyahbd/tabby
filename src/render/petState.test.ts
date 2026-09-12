@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { basePosition, bowlFeedSpot, PET_SIZE } from "./layout.ts";
+import { basePosition, eatingSpot, PET_SIZE } from "./layout.ts";
 import {
 	initialSnapshot,
 	repositionOnResize,
@@ -89,7 +89,7 @@ test("repositionOnResize re-anchors resting states to their layout spot", () => 
 		stateEnteredAt: 1,
 	};
 	const nextEating = repositionOnResize(eating, small);
-	assert.deepEqual({ x: nextEating.x, y: nextEating.y }, bowlFeedSpot(small));
+	assert.deepEqual({ x: nextEating.x, y: nextEating.y }, eatingSpot(small));
 });
 
 test("repositionOnResize clamps other states back onto the screen", () => {

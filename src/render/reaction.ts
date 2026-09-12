@@ -39,6 +39,22 @@ export function spawnHearts(
 	}
 }
 
+export function spawnCrumbs(
+	container: HTMLElement,
+	doc: Document = document,
+	rng: () => number = Math.random,
+): void {
+	const count = 1 + Math.floor(rng() * 2);
+	for (let i = 0; i < count; i++) {
+		const crumb = doc.createElement("div");
+		crumb.className = "tabby-crumb";
+		crumb.style.setProperty("--dx", `${Math.round((rng() - 0.5) * 32)}px`);
+		crumb.style.setProperty("--delay", `${i * 120}ms`);
+		crumb.addEventListener("animationend", () => crumb.remove());
+		container.appendChild(crumb);
+	}
+}
+
 export function playMeow(rng: () => number = Math.random): void {
 	const ctx = getAudioContext();
 	if (!ctx) return;

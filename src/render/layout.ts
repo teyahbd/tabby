@@ -72,10 +72,10 @@ export function bowlPosition(viewport: Viewport): Point {
 	};
 }
 
-export function bowlFeedSpot(viewport: Viewport): Point {
+export function eatingSpot(viewport: Viewport): Point {
 	const bowl = bowlPosition(viewport);
 	return {
-		x: Math.max(0, bowl.x - (PET_SIZE - BOWL_WIDTH) / 2),
+		x: Math.max(0, bowl.x - (BOWL_GAP + PET_SIZE) / 2),
 		y: basePosition(viewport).y,
 	};
 }

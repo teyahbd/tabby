@@ -12,7 +12,7 @@ import {
 	BOWL_GAP,
 	BOWL_HEIGHT,
 	BOWL_WIDTH,
-	bowlFeedSpot,
+	eatingSpot,
 	bowlPosition,
 	PET_SIZE,
 } from "./layout.ts";
@@ -59,10 +59,11 @@ test("bowl sits just left of the bed on the same floor", () => {
 	});
 });
 
-test("the feed spot centers the pet over the bowl at floor height", () => {
+test("the eating spot sits left of the bowl on the same floor", () => {
 	const view = { width: 1000, height: 800 };
-	assert.deepEqual(bowlFeedSpot(view), {
-		x: bowlPosition(view).x - (PET_SIZE - BOWL_WIDTH) / 2,
+	const bowl = bowlPosition(view);
+	assert.deepEqual(eatingSpot(view), {
+		x: bowl.x - (BOWL_GAP + PET_SIZE) / 2,
 		y: basePosition(view).y,
 	});
 });

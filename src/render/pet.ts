@@ -26,10 +26,11 @@ import {
 	resumeSnapshot,
 	type PetSnapshot,
 } from "./petState.ts";
-import { reactToPet } from "./reaction.ts";
+import { reactToPet, spawnCrumbs } from "./reaction.ts";
 import { startWalkLoop } from "./walkLoop.ts";
 
 const ROOT_ID = "tabby-root";
+const CRUMB_INTERVAL_MS = 1_200;
 
 function viewport(doc: Document) {
 	return {
@@ -76,12 +77,28 @@ export function mountPet(
 	let unsubHunger: (() => void) | null = null;
 	let hunger: HungerState = DEFAULT_HUNGER;
 	let nightVisitUntil: number | null = null;
+	let crumbTimer: ReturnType<typeof setInterval> | null = null;
+
+	const startCrumbs = () => {
+		if (crumbTimer !== null) return;
+		spawnCrumbs(root, doc);
+		crumbTimer = setInterval(() => spawnCrumbs(root, doc), CRUMB_INTERVAL_MS);
+	};
+	const stopCrumbs = () => {
+		if (crumbTimer === null) return;
+		clearInterval(crumbTimer);
+		crumbTimer = null;
+	};
 
 	const render = () => {
 		if (!snapshot) return;
 		root.style.transform = `translate(${snapshot.x}px, ${snapshot.y}px)`;
 		root.dataset.state = snapshot.currentState;
 		root.dataset.facing = snapshot.facing;
+	};
+
+	const setApproachingBowl = (value: boolean) => {
+		root.dataset.approaching = value ? "true" : "false";
 	};
 
 	const patchSnapshot = (patch: Partial<PetSnapshot>, persist = true) => {
@@ -108,6 +125,7 @@ export function mountPet(
 		const resumed = resumeSnapshot(saved, viewport(doc), Date.now());
 		snapshot = resumed;
 		render();
+		if (resumed.currentState === "Eating") setApproachingBowl(true);
 		doc.body.appendChild(root);
 		if (JSON.stringify(saved) !== JSON.stringify(resumed)) {
 			await storage.set(PET_STATE_KEY, resumed);
@@ -243,19 +261,27 @@ export function mountPet(
 			getFacing: () => snapshot?.facing ?? "left",
 			getViewport: () => viewport(doc),
 			getEnteredAt: () => snapshot?.stateEnteredAt ?? Date.now(),
-			onEatStart: ({ facing }) =>
+			onEatStart: ({ facing }) => {
+				setApproachingBowl(true);
 				patchSnapshot({
 					currentState: "Eating",
 					facing,
 					stateEnteredAt: Date.now(),
-				}),
+				});
+			},
 			onEatStep: ({ x, y }) => patchSnapshot({ x, y }, false),
-			onEatArrive: ({ x, y }) => patchSnapshot({ x, y }),
+			onEatArrive: ({ x, y, facing }) => {
+				setApproachingBowl(false);
+				patchSnapshot({ x, y, facing });
+				startCrumbs();
+			},
 			onSeen: (t) => {
 				hunger = { ...hunger, lastSeenAt: t };
 				void storage.set<HungerState>(HUNGER_KEY, hunger);
 			},
 			onFinishEating: ({ ateAt, x, y }) => {
+				setApproachingBowl(false);
+				stopCrumbs();
 				patchSnapshot({
 					currentState: "IdleSit",
 					x,
@@ -275,6 +301,7 @@ export function mountPet(
 
 	return () => {
 		disposed = true;
+		stopCrumbs();
 		view?.removeEventListener("resize", onResize);
 		stopIdle?.();
 		stopWalk?.();

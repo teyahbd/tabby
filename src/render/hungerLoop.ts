@@ -1,4 +1,9 @@
-import { bowlFeedSpot, type Point, type Viewport } from "./layout.ts";
+import {
+	bowlPosition,
+	eatingSpot,
+	type Point,
+	type Viewport,
+} from "./layout.ts";
 import type { Facing, PetState } from "./petState.ts";
 import { facingFor, walkStep } from "./walkLoop.ts";
 
@@ -88,7 +93,7 @@ export interface HungerLoopDeps {
 	getEnteredAt: () => number;
 	onEatStart: (next: { facing: Facing }) => void;
 	onEatStep: (pos: Point) => void;
-	onEatArrive: (pos: Point) => void;
+	onEatArrive: (next: Point & { facing: Facing }) => void;
 	onFinishEating: (next: { ateAt: number; x: number; y: number }) => void;
 	onSeen?: (now: number) => void;
 	setTimer?: (fn: () => void, ms: number) => number;
@@ -130,7 +135,7 @@ export function startHungerLoop(deps: HungerLoopDeps): () => void {
 	const finish = () => {
 		eatHandle = null;
 		if (deps.getState() === "Eating") {
-			const spot = bowlFeedSpot(deps.getViewport());
+			const spot = eatingSpot(deps.getViewport());
 			deps.onFinishEating({ ateAt: nowMs(), x: spot.x, y: spot.y });
 		}
 		busy = false;
@@ -139,7 +144,7 @@ export function startHungerLoop(deps: HungerLoopDeps): () => void {
 
 	const walkToBowlThenEat = (eatMs: number) => {
 		busy = true;
-		const target = bowlFeedSpot(deps.getViewport());
+		const target = eatingSpot(deps.getViewport());
 
 		let last = now();
 		const frame = (t: number) => {
@@ -153,7 +158,12 @@ export function startHungerLoop(deps: HungerLoopDeps): () => void {
 			last = t;
 			if (step.arrived) {
 				rafHandle = null;
-				deps.onEatArrive({ x: target.x, y: target.y });
+				const bowl = bowlPosition(deps.getViewport());
+				deps.onEatArrive({
+					x: target.x,
+					y: target.y,
+					facing: facingFor(target.x, bowl.x, deps.getFacing()),
+				});
 				eatHandle = setTimer(finish, eatMs);
 				return;
 			}
@@ -164,7 +174,7 @@ export function startHungerLoop(deps: HungerLoopDeps): () => void {
 	};
 
 	const startEat = () => {
-		const target = bowlFeedSpot(deps.getViewport());
+		const target = eatingSpot(deps.getViewport());
 		deps.onEatStart({
 			facing: facingFor(deps.getPosition().x, target.x, deps.getFacing()),
 		});

@@ -85,10 +85,10 @@
       y: basePosition(viewport2).y + (PET_SIZE - BOWL_HEIGHT)
     };
   }
-  function bowlFeedSpot(viewport2) {
+  function eatingSpot(viewport2) {
     const bowl = bowlPosition(viewport2);
     return {
-      x: Math.max(0, bowl.x - (PET_SIZE - BOWL_WIDTH) / 2),
+      x: Math.max(0, bowl.x - (BOWL_GAP + PET_SIZE) / 2),
       y: basePosition(viewport2).y
     };
   }
@@ -326,7 +326,7 @@
     const finish = () => {
       eatHandle = null;
       if (deps.getState() === "Eating") {
-        const spot = bowlFeedSpot(deps.getViewport());
+        const spot = eatingSpot(deps.getViewport());
         deps.onFinishEating({ ateAt: nowMs(), x: spot.x, y: spot.y });
       }
       busy = false;
@@ -334,7 +334,7 @@
     };
     const walkToBowlThenEat = (eatMs) => {
       busy = true;
-      const target = bowlFeedSpot(deps.getViewport());
+      const target = eatingSpot(deps.getViewport());
       let last = now();
       const frame = (t) => {
         if (deps.getState() !== "Eating") {
@@ -347,7 +347,12 @@
         last = t;
         if (step.arrived) {
           rafHandle = null;
-          deps.onEatArrive({ x: target.x, y: target.y });
+          const bowl = bowlPosition(deps.getViewport());
+          deps.onEatArrive({
+            x: target.x,
+            y: target.y,
+            facing: facingFor(target.x, bowl.x, deps.getFacing())
+          });
           eatHandle = setTimer(finish, eatMs);
           return;
         }
@@ -357,7 +362,7 @@
       rafHandle = raf(frame);
     };
     const startEat = () => {
-      const target = bowlFeedSpot(deps.getViewport());
+      const target = eatingSpot(deps.getViewport());
       deps.onEatStart({
         facing: facingFor(deps.getPosition().x, target.x, deps.getFacing())
       });
@@ -755,7 +760,7 @@
   var RESTING_ANCHORS = {
     AtBase: basePosition,
     Sleeping: basePosition,
-    Eating: bowlFeedSpot
+    Eating: eatingSpot
   };
   function repositionOnResize(snapshot, viewport2) {
     const anchor = RESTING_ANCHORS[snapshot.currentState];
@@ -798,6 +803,17 @@
       heart.style.setProperty("--delay", `${i * 90}ms`);
       heart.addEventListener("animationend", () => heart.remove());
       container.appendChild(heart);
+    }
+  }
+  function spawnCrumbs(container, doc = document, rng = Math.random) {
+    const count = 1 + Math.floor(rng() * 2);
+    for (let i = 0; i < count; i++) {
+      const crumb = doc.createElement("div");
+      crumb.className = "tabby-crumb";
+      crumb.style.setProperty("--dx", `${Math.round((rng() - 0.5) * 32)}px`);
+      crumb.style.setProperty("--delay", `${i * 120}ms`);
+      crumb.addEventListener("animationend", () => crumb.remove());
+      container.appendChild(crumb);
     }
   }
   function playMeow(rng = Math.random) {
@@ -847,6 +863,7 @@
 
   // src/render/pet.ts
   var ROOT_ID = "tabby-root";
+  var CRUMB_INTERVAL_MS = 1200;
   function viewport(doc) {
     return {
       width: doc.documentElement.clientWidth,
@@ -885,11 +902,25 @@
     let unsubHunger = null;
     let hunger = DEFAULT_HUNGER;
     let nightVisitUntil = null;
+    let crumbTimer = null;
+    const startCrumbs = () => {
+      if (crumbTimer !== null) return;
+      spawnCrumbs(root, doc);
+      crumbTimer = setInterval(() => spawnCrumbs(root, doc), CRUMB_INTERVAL_MS);
+    };
+    const stopCrumbs = () => {
+      if (crumbTimer === null) return;
+      clearInterval(crumbTimer);
+      crumbTimer = null;
+    };
     const render = () => {
       if (!snapshot) return;
       root.style.transform = `translate(${snapshot.x}px, ${snapshot.y}px)`;
       root.dataset.state = snapshot.currentState;
       root.dataset.facing = snapshot.facing;
+    };
+    const setApproachingBowl = (value) => {
+      root.dataset.approaching = value ? "true" : "false";
     };
     const patchSnapshot = (patch, persist = true) => {
       if (!snapshot) return;
@@ -912,6 +943,7 @@
       const resumed = resumeSnapshot(saved, viewport(doc), Date.now());
       snapshot = resumed;
       render();
+      if (resumed.currentState === "Eating") setApproachingBowl(true);
       doc.body.appendChild(root);
       if (JSON.stringify(saved) !== JSON.stringify(resumed)) {
         await storage2.set(PET_STATE_KEY, resumed);
@@ -1020,18 +1052,27 @@
         getFacing: () => snapshot?.facing ?? "left",
         getViewport: () => viewport(doc),
         getEnteredAt: () => snapshot?.stateEnteredAt ?? Date.now(),
-        onEatStart: ({ facing }) => patchSnapshot({
-          currentState: "Eating",
-          facing,
-          stateEnteredAt: Date.now()
-        }),
+        onEatStart: ({ facing }) => {
+          setApproachingBowl(true);
+          patchSnapshot({
+            currentState: "Eating",
+            facing,
+            stateEnteredAt: Date.now()
+          });
+        },
         onEatStep: ({ x, y }) => patchSnapshot({ x, y }, false),
-        onEatArrive: ({ x, y }) => patchSnapshot({ x, y }),
+        onEatArrive: ({ x, y, facing }) => {
+          setApproachingBowl(false);
+          patchSnapshot({ x, y, facing });
+          startCrumbs();
+        },
         onSeen: (t) => {
           hunger = { ...hunger, lastSeenAt: t };
           void storage2.set(HUNGER_KEY, hunger);
         },
         onFinishEating: ({ ateAt, x, y }) => {
+          setApproachingBowl(false);
+          stopCrumbs();
           patchSnapshot({
             currentState: "IdleSit",
             x,
@@ -1050,6 +1091,7 @@
     })();
     return () => {
       disposed = true;
+      stopCrumbs();
       view?.removeEventListener("resize", onResize);
       stopIdle?.();
       stopWalk?.();

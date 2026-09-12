@@ -11,7 +11,7 @@ import {
 	isHungry,
 	startHungerLoop,
 } from "./hungerLoop.ts";
-import { bowlFeedSpot } from "./layout.ts";
+import { eatingSpot } from "./layout.ts";
 import type { Facing, PetState } from "./petState.ts";
 
 test("isHungry is true with no prior meal and after the cooldown", () => {
@@ -154,7 +154,8 @@ function scene(
 			position = next;
 		},
 		onEatArrive: (next) => {
-			position = next;
+			position = { x: next.x, y: next.y };
+			facing = next.facing;
 		},
 		onFinishEating: (next) => {
 			current = "IdleSit";
@@ -212,7 +213,7 @@ test("a hungry pet with a full bowl walks over, eats, and empties the bowl", () 
 	s.h.fireTimer();
 	assert.deepEqual(s.events, ["start", "finish"]);
 	assert.equal(s.state, "IdleSit");
-	assert.deepEqual(s.position, bowlFeedSpot(viewport));
+	assert.deepEqual(s.position, eatingSpot(viewport));
 	assert.deepEqual(s.stored, {
 		bowlFilled: false,
 		lastAteAt: 10_000_000,
@@ -246,12 +247,7 @@ test("a wandering pet is redirected to the bowl", () => {
 });
 
 test("a resumed Eating pet finishes the meal instead of restarting it", () => {
-	const s = scene(
-		"Eating",
-		filled,
-		bowlFeedSpot(viewport),
-		10_000_000 - 20_000,
-	);
+	const s = scene("Eating", filled, eatingSpot(viewport), 10_000_000 - 20_000);
 	assert.deepEqual(s.events, []);
 	assert.equal(s.state, "Eating");
 
@@ -271,11 +267,11 @@ test("a resumed Eating pet finishes the meal instead of restarting it", () => {
 test("a resumed Eating pet parks at the bowl so a later resume does not re-walk", () => {
 	const s = scene("Eating", filled, { x: 100, y: 100 }, 10_000_000 - 20_000);
 	for (let i = 0; i < 500 && s.h.hasFrame; i++) s.h.advance(50);
-	assert.deepEqual(s.position, bowlFeedSpot(viewport));
+	assert.deepEqual(s.position, eatingSpot(viewport));
 });
 
 test("a resumed Eating pet whose meal already elapsed finishes immediately", () => {
-	const s = scene("Eating", filled, bowlFeedSpot(viewport), 0);
+	const s = scene("Eating", filled, eatingSpot(viewport), 0);
 	for (let i = 0; i < 500 && s.h.hasFrame; i++) s.h.advance(50);
 	s.h.fireTimer();
 	assert.deepEqual(s.events, ["finish"]);

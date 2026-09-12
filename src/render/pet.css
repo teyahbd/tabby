@@ -112,7 +112,8 @@
 }
 
 #tabby-root[data-state="Walking"] #tabby-sprite,
-#tabby-root[data-state="ReturningToBase"] #tabby-sprite {
+#tabby-root[data-state="ReturningToBase"] #tabby-sprite,
+#tabby-root[data-state="Eating"][data-approaching="true"] #tabby-sprite {
 	animation: tabby-hop 0.5s steps(4) infinite;
 }
 
@@ -133,7 +134,7 @@
 	background-position: 0 calc(var(--cell) * -3);
 }
 
-#tabby-root[data-state="Eating"] #tabby-sprite {
+#tabby-root[data-state="Eating"]:not([data-approaching="true"]) #tabby-sprite {
 	animation:
 		tabby-sit 2.8s steps(4) infinite alternate,
 		tabby-nibble 0.45s ease-in-out infinite;
@@ -262,6 +263,37 @@
 	}
 	100% {
 		transform: translate(calc(-50% + var(--dx, 0px)), -48px) scale(1);
+		opacity: 0;
+	}
+}
+
+.tabby-crumb {
+	position: absolute;
+	left: 42%;
+	top: 58%;
+	width: 8px;
+	height: 8px;
+	background: #c98a4b;
+	border-radius: 1px;
+	pointer-events: none;
+	will-change: transform, opacity;
+	animation: tabby-crumb-fall 0.7s ease-in var(--delay, 0ms) both;
+}
+
+#tabby-root[data-facing="right"] .tabby-crumb {
+	left: 58%;
+}
+
+@keyframes tabby-crumb-fall {
+	0% {
+		transform: translate(-50%, 0) scale(1);
+		opacity: 0;
+	}
+	15% {
+		opacity: 1;
+	}
+	100% {
+		transform: translate(calc(-50% + var(--dx, 0px)), 22px) scale(0.5);
 		opacity: 0;
 	}
 }
