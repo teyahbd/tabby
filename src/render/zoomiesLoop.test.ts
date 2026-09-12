@@ -47,6 +47,7 @@ test("shouldStartZoomies requires daytime and an unsuppressed state", () => {
 	assert.equal(shouldStartZoomies("Eating", true), false);
 	assert.equal(shouldStartZoomies("Dragged", true), false);
 	assert.equal(shouldStartZoomies("ReturningToBase", true), false);
+	assert.equal(shouldStartZoomies("IdleSit", true, true), false);
 });
 
 function harness() {
@@ -407,4 +408,33 @@ test("startZoomiesLoop can start at night while on a night visit", () => {
 
 	h.fireTimer();
 	assert.equal(departed, true);
+});
+
+test("startZoomiesLoop skips a due trigger while the laser is active, and rearms", () => {
+	const h = harness();
+	let departed = false;
+
+	startZoomiesLoop({
+		getState: () => "IdleSit",
+		getPosition: () => ({ x: 0, y: 0 }),
+		getFacing: () => "left",
+		getViewport: () => ({ width: 1000, height: 800 }),
+		onDepart: () => {
+			departed = true;
+		},
+		onStep: () => {},
+		onArrive: () => {},
+		setTimer: h.setTimer,
+		clearTimer: h.clearTimer,
+		raf: h.raf,
+		cancelRaf: h.cancelRaf,
+		now: h.now,
+		nowDate: day,
+		rng: () => 0,
+		isLaserActive: () => true,
+	});
+
+	h.fireTimer();
+	assert.equal(departed, false);
+	assert.ok(h.hasTimer);
 });

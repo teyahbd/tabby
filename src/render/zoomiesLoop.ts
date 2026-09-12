@@ -15,9 +15,6 @@ export const ZOOMIES_DURATION_MIN_MS = 20_000;
 export const ZOOMIES_DURATION_MAX_MS = 30_000;
 export const ZOOMIES_SPEED_MULTIPLIER = 2.5;
 
-// Same suppression list as the laser (Extra 1). Laser isn't built yet, so
-// there's nothing here to check for "laser active" — CLAUDE.md's Extra 1
-// section carries a reminder to add that condition once it exists.
 export const ZOOMIES_SUPPRESSED_STATES: ReadonlySet<PetState> =
 	new Set<PetState>([
 		"Napping",
@@ -44,8 +41,12 @@ export function zoomiesSpeed(): number {
 	return WALK_SPEED_PX_PER_S * ZOOMIES_SPEED_MULTIPLIER;
 }
 
-export function shouldStartZoomies(state: PetState, daytime: boolean): boolean {
-	return daytime && !ZOOMIES_SUPPRESSED_STATES.has(state);
+export function shouldStartZoomies(
+	state: PetState,
+	daytime: boolean,
+	laserActive = false,
+): boolean {
+	return daytime && !laserActive && !ZOOMIES_SUPPRESSED_STATES.has(state);
 }
 
 export interface ZoomiesLoopDeps {
@@ -69,6 +70,8 @@ export interface ZoomiesLoopDeps {
 	onStep: (pos: Point) => void;
 	onArrive: (next: { currentState: PetState; x: number; y: number }) => void;
 	isNightVisiting?: () => boolean;
+	// "laser wins" — a due trigger is skipped and rescheduled while active.
+	isLaserActive?: () => boolean;
 	setTimer?: (fn: () => void, ms: number) => number;
 	clearTimer?: (handle: number) => void;
 	raf?: (fn: (t: number) => void) => number;
@@ -102,7 +105,8 @@ export function startZoomiesLoop(deps: ZoomiesLoopDeps): () => void {
 	const check = () => {
 		timerHandle = null;
 		const daytime = isDaytime(nowDate()) || (deps.isNightVisiting?.() ?? false);
-		if (!shouldStartZoomies(deps.getState(), daytime)) {
+		const laserActive = deps.isLaserActive?.() ?? false;
+		if (!shouldStartZoomies(deps.getState(), daytime, laserActive)) {
 			arm();
 			return;
 		}

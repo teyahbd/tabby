@@ -79,3 +79,28 @@ export function eatingSpot(viewport: Viewport): Point {
 		y: basePosition(viewport).y,
 	};
 }
+
+// Standin sizes for the laser toggle/device art (Extra 1) — see CLAUDE.md for
+// the real-sprite reminder.
+export const LASER_TOGGLE_WIDTH = 32;
+export const LASER_TOGGLE_HEIGHT = 32;
+export const LASER_TOGGLE_GAP = 14;
+export const LASER_DEVICE_WIDTH = 40;
+export const LASER_DEVICE_HEIGHT = 40;
+
+export function laserTogglePosition(viewport: Viewport): Point {
+	// Extends the bed/bowl cluster in the bottom-right corner one step
+	// further left.
+	const bowl = bowlPosition(viewport);
+	return {
+		x: Math.max(0, bowl.x - LASER_TOGGLE_GAP - LASER_TOGGLE_WIDTH),
+		y: basePosition(viewport).y + (PET_SIZE - LASER_TOGGLE_HEIGHT),
+	};
+}
+
+export function laserDevicePosition(viewport: Viewport): Point {
+	return {
+		x: Math.round(Math.max(0, (viewport.width - LASER_DEVICE_WIDTH) / 2)),
+		y: Math.max(0, viewport.height - LASER_DEVICE_HEIGHT - BASE_MARGIN),
+	};
+}

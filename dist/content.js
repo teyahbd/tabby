@@ -92,6 +92,24 @@
       y: basePosition(viewport2).y
     };
   }
+  var LASER_TOGGLE_WIDTH = 32;
+  var LASER_TOGGLE_HEIGHT = 32;
+  var LASER_TOGGLE_GAP = 14;
+  var LASER_DEVICE_WIDTH = 40;
+  var LASER_DEVICE_HEIGHT = 40;
+  function laserTogglePosition(viewport2) {
+    const bowl = bowlPosition(viewport2);
+    return {
+      x: Math.max(0, bowl.x - LASER_TOGGLE_GAP - LASER_TOGGLE_WIDTH),
+      y: basePosition(viewport2).y + (PET_SIZE - LASER_TOGGLE_HEIGHT)
+    };
+  }
+  function laserDevicePosition(viewport2) {
+    return {
+      x: Math.round(Math.max(0, (viewport2.width - LASER_DEVICE_WIDTH) / 2)),
+      y: Math.max(0, viewport2.height - LASER_DEVICE_HEIGHT - BASE_MARGIN)
+    };
+  }
 
   // src/render/bed.ts
   var BED_ID = "tabby-bed";
@@ -554,6 +572,186 @@
     return until !== null && now < until;
   }
 
+  // src/render/laser.ts
+  var LASER_TOGGLE_ID = "tabby-laser-toggle";
+  var LASER_DEVICE_ID = "tabby-laser-device";
+  var LASER_BEAM_ID = "tabby-laser-beam";
+  var LASER_BEAM_LINE_ID = "tabby-laser-beam-line";
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  function mountLaser(doc = document) {
+    let active = false;
+    let cursor = null;
+    let deviceAngle = 0;
+    const toggle = doc.createElement("div");
+    toggle.id = LASER_TOGGLE_ID;
+    toggle.setAttribute("role", "button");
+    toggle.setAttribute("aria-label", "Toggle laser pointer");
+    const device = doc.createElement("div");
+    device.id = LASER_DEVICE_ID;
+    device.setAttribute("aria-hidden", "true");
+    device.hidden = true;
+    const beam = doc.createElementNS(SVG_NS, "svg");
+    beam.setAttribute("id", LASER_BEAM_ID);
+    beam.setAttribute("aria-hidden", "true");
+    beam.setAttribute("hidden", "");
+    const line = doc.createElementNS(SVG_NS, "line");
+    line.setAttribute("id", LASER_BEAM_LINE_ID);
+    beam.appendChild(line);
+    const viewport2 = () => ({
+      width: doc.documentElement.clientWidth,
+      height: doc.documentElement.clientHeight
+    });
+    const deviceTip = () => {
+      const pos = laserDevicePosition(viewport2());
+      return {
+        x: pos.x + LASER_DEVICE_WIDTH / 2,
+        y: pos.y + LASER_DEVICE_HEIGHT / 2
+      };
+    };
+    const positionToggle = () => {
+      const pos = laserTogglePosition(viewport2());
+      toggle.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+    };
+    const applyDeviceTransform = (angleDeg) => {
+      const pos = laserDevicePosition(viewport2());
+      device.style.transform = `translate(${pos.x}px, ${pos.y}px) rotate(${angleDeg}deg)`;
+    };
+    const positionDevice = () => applyDeviceTransform(deviceAngle);
+    const updateBeam = () => {
+      const v = viewport2();
+      beam.setAttribute("width", String(v.width));
+      beam.setAttribute("height", String(v.height));
+      if (!cursor) return;
+      const tip = deviceTip();
+      line.setAttribute("x1", String(tip.x));
+      line.setAttribute("y1", String(tip.y));
+      line.setAttribute("x2", String(cursor.x));
+      line.setAttribute("y2", String(cursor.y));
+      deviceAngle = Math.atan2(cursor.y - tip.y, cursor.x - tip.x) * (180 / Math.PI);
+      applyDeviceTransform(deviceAngle);
+    };
+    const onMove = (event) => {
+      const e = event;
+      cursor = { x: e.clientX, y: e.clientY };
+      if (active) updateBeam();
+    };
+    const setActive = (next) => {
+      if (active === next) return;
+      active = next;
+      device.hidden = !active;
+      if (active) beam.removeAttribute("hidden");
+      else beam.setAttribute("hidden", "");
+      if (active) {
+        positionDevice();
+        updateBeam();
+      }
+    };
+    const onClick = () => setActive(!active);
+    const onResize = () => {
+      positionToggle();
+      positionDevice();
+      updateBeam();
+    };
+    positionToggle();
+    positionDevice();
+    toggle.addEventListener("click", onClick);
+    doc.body.appendChild(toggle);
+    doc.body.appendChild(device);
+    doc.body.appendChild(beam);
+    const view = doc.defaultView;
+    view?.addEventListener("resize", onResize);
+    view?.addEventListener("mousemove", onMove);
+    return {
+      getIsActive: () => active,
+      getCursor: () => cursor,
+      unmount: () => {
+        view?.removeEventListener("resize", onResize);
+        view?.removeEventListener("mousemove", onMove);
+        toggle.removeEventListener("click", onClick);
+        toggle.remove();
+        device.remove();
+        beam.remove();
+      }
+    };
+  }
+
+  // src/render/laserLoop.ts
+  var LASER_CHECK_MS = 200;
+  var LASER_CHASE_STATES = /* @__PURE__ */ new Set([
+    "IdleSit",
+    "IdleLie",
+    "Walking",
+    "AtBase"
+  ]);
+  function canChaseLaser(state, active) {
+    return active && LASER_CHASE_STATES.has(state);
+  }
+  function startLaserLoop(deps) {
+    const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+    const clearTimer = deps.clearTimer ?? ((handle) => clearTimeout(handle));
+    const raf = deps.raf ?? ((fn) => requestAnimationFrame(fn));
+    const cancelRaf = deps.cancelRaf ?? ((handle) => cancelAnimationFrame(handle));
+    const now = deps.now ?? (() => performance.now());
+    let timerHandle = null;
+    let rafHandle = null;
+    const armCheck = () => {
+      timerHandle = setTimer(check, LASER_CHECK_MS);
+    };
+    const check = () => {
+      timerHandle = null;
+      if (!canChaseLaser(deps.getState(), deps.isLaserActive())) {
+        armCheck();
+        return;
+      }
+      const cursor = deps.getCursor();
+      const start = deps.getPosition();
+      deps.onDepart({
+        facing: cursor ? facingFor(start.x, cursor.x, deps.getFacing()) : deps.getFacing()
+      });
+      chase();
+    };
+    const chase = () => {
+      let last = now();
+      const frame = (t) => {
+        if (deps.getState() !== "Walking") {
+          rafHandle = null;
+          armCheck();
+          return;
+        }
+        if (!deps.isLaserActive()) {
+          rafHandle = null;
+          const pos2 = deps.getPosition();
+          deps.onDropChase({ currentState: "IdleSit", x: pos2.x, y: pos2.y });
+          armCheck();
+          return;
+        }
+        const cursor = deps.getCursor();
+        if (!cursor) {
+          last = t;
+          rafHandle = raf(frame);
+          return;
+        }
+        const pos = deps.getPosition();
+        const step = walkStep(pos, cursor, t - last);
+        last = t;
+        deps.onStep({
+          x: step.x,
+          y: step.y,
+          facing: facingFor(pos.x, cursor.x, deps.getFacing())
+        });
+        rafHandle = raf(frame);
+      };
+      rafHandle = raf(frame);
+    };
+    armCheck();
+    return () => {
+      if (timerHandle != null) clearTimer(timerHandle);
+      if (rafHandle != null) cancelRaf(rafHandle);
+      timerHandle = null;
+      rafHandle = null;
+    };
+  }
+
   // src/render/napLoop.ts
   var NAP_CHECK_MIN_MS = 6e4;
   var NAP_CHECK_MAX_MS = 12e4;
@@ -911,8 +1109,8 @@
   function zoomiesSpeed() {
     return WALK_SPEED_PX_PER_S * ZOOMIES_SPEED_MULTIPLIER;
   }
-  function shouldStartZoomies(state, daytime) {
-    return daytime && !ZOOMIES_SUPPRESSED_STATES.has(state);
+  function shouldStartZoomies(state, daytime, laserActive = false) {
+    return daytime && !laserActive && !ZOOMIES_SUPPRESSED_STATES.has(state);
   }
   function startZoomiesLoop(deps) {
     const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
@@ -931,7 +1129,8 @@
     const check = () => {
       timerHandle = null;
       const daytime = isDaytime(nowDate()) || (deps.isNightVisiting?.() ?? false);
-      if (!shouldStartZoomies(deps.getState(), daytime)) {
+      const laserActive = deps.isLaserActive?.() ?? false;
+      if (!shouldStartZoomies(deps.getState(), daytime, laserActive)) {
         arm();
         return;
       }
@@ -1043,6 +1242,7 @@
     let stopIdle = null;
     let stopWalk = null;
     let stopZoomies = null;
+    let stopLaserLoop = null;
     let stopNap = null;
     let stopNight = null;
     let stopDrag = null;
@@ -1086,6 +1286,7 @@
     view?.addEventListener("resize", onResize);
     const unmountBed = mountBed(doc);
     const unmountBowl = mountBowl(storage2, doc);
+    const laser = mountLaser(doc);
     void (async () => {
       const saved = await storage2.get(PET_STATE_KEY);
       if (disposed) return;
@@ -1159,7 +1360,25 @@
           zoomiesEndAt: void 0,
           stateEnteredAt: Date.now()
         }),
-        isNightVisiting: () => isNightVisiting(nightVisitUntil, Date.now())
+        isNightVisiting: () => isNightVisiting(nightVisitUntil, Date.now()),
+        isLaserActive: () => laser.getIsActive()
+      });
+      stopLaserLoop = startLaserLoop({
+        getState: () => snapshot?.currentState ?? "IdleSit",
+        getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
+        getFacing: () => snapshot?.facing ?? "left",
+        isLaserActive: () => laser.getIsActive(),
+        getCursor: () => laser.getCursor(),
+        onDepart: ({ facing }) => patchSnapshot({
+          currentState: "Walking",
+          facing,
+          targetX: void 0,
+          targetY: void 0,
+          zoomiesEndAt: void 0,
+          stateEnteredAt: Date.now()
+        }),
+        onStep: ({ x, y, facing }) => patchSnapshot({ x, y, facing }, false),
+        onDropChase: ({ currentState, x, y }) => patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() })
       });
       stopNap = startNapLoop({
         getState: () => snapshot?.currentState ?? "IdleSit",
@@ -1290,6 +1509,7 @@
       stopIdle?.();
       stopWalk?.();
       stopZoomies?.();
+      stopLaserLoop?.();
       stopNap?.();
       stopNight?.();
       stopDrag?.();
@@ -1298,6 +1518,7 @@
       unsubHunger?.();
       unmountBed();
       unmountBowl();
+      laser.unmount();
       root.remove();
     };
   }

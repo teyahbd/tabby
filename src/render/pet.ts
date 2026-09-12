@@ -17,6 +17,8 @@ import {
 } from "./hungerLoop.ts";
 import { startIdleLoop } from "./idleLoop.ts";
 import { basePosition } from "./layout.ts";
+import { mountLaser } from "./laser.ts";
+import { startLaserLoop } from "./laserLoop.ts";
 import { startNapLoop } from "./napLoop.ts";
 import { startNightLoop } from "./nightLoop.ts";
 import { startPetting } from "./petting.ts";
@@ -71,6 +73,7 @@ export function mountPet(
 	let stopIdle: (() => void) | null = null;
 	let stopWalk: (() => void) | null = null;
 	let stopZoomies: (() => void) | null = null;
+	let stopLaserLoop: (() => void) | null = null;
 	let stopNap: (() => void) | null = null;
 	let stopNight: (() => void) | null = null;
 	let stopDrag: (() => void) | null = null;
@@ -120,6 +123,7 @@ export function mountPet(
 
 	const unmountBed = mountBed(doc);
 	const unmountBowl = mountBowl(storage, doc);
+	const laser = mountLaser(doc);
 
 	void (async () => {
 		const saved = await storage.get<unknown>(PET_STATE_KEY);
@@ -212,6 +216,27 @@ export function mountPet(
 					stateEnteredAt: Date.now(),
 				}),
 			isNightVisiting: () => isNightVisiting(nightVisitUntil, Date.now()),
+			isLaserActive: () => laser.getIsActive(),
+		});
+
+		stopLaserLoop = startLaserLoop({
+			getState: () => snapshot?.currentState ?? "IdleSit",
+			getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
+			getFacing: () => snapshot?.facing ?? "left",
+			isLaserActive: () => laser.getIsActive(),
+			getCursor: () => laser.getCursor(),
+			onDepart: ({ facing }) =>
+				patchSnapshot({
+					currentState: "Walking",
+					facing,
+					targetX: undefined,
+					targetY: undefined,
+					zoomiesEndAt: undefined,
+					stateEnteredAt: Date.now(),
+				}),
+			onStep: ({ x, y, facing }) => patchSnapshot({ x, y, facing }, false),
+			onDropChase: ({ currentState, x, y }) =>
+				patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() }),
 		});
 
 		stopNap = startNapLoop({
@@ -364,6 +389,7 @@ export function mountPet(
 		stopIdle?.();
 		stopWalk?.();
 		stopZoomies?.();
+		stopLaserLoop?.();
 		stopNap?.();
 		stopNight?.();
 		stopDrag?.();
@@ -372,6 +398,7 @@ export function mountPet(
 		unsubHunger?.();
 		unmountBed();
 		unmountBowl();
+		laser.unmount();
 		root.remove();
 	};
 }
