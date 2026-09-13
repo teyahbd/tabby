@@ -675,6 +675,16 @@
   }
 
   // src/render/laserLoop.ts
+  function centerX(x) {
+    return x + PET_SIZE / 2;
+  }
+  function chaseTarget(cursor, viewport2) {
+    const onRightHalf = cursor.x >= viewport2.width / 2;
+    return {
+      x: onRightHalf ? cursor.x : cursor.x - PET_SIZE,
+      y: cursor.y
+    };
+  }
   var LASER_CHECK_MS = 200;
   var LASER_CHASE_STATES = /* @__PURE__ */ new Set([
     "IdleSit",
@@ -704,8 +714,9 @@
       }
       const cursor = deps.getCursor();
       const start = deps.getPosition();
+      const target = cursor ? chaseTarget(cursor, deps.getViewport()) : null;
       deps.onDepart({
-        facing: cursor ? facingFor(start.x, cursor.x, deps.getFacing()) : deps.getFacing()
+        facing: target ? facingFor(start.x, target.x, deps.getFacing()) : deps.getFacing()
       });
       chase();
     };
@@ -730,14 +741,12 @@
           rafHandle = raf(frame);
           return;
         }
+        const target = chaseTarget(cursor, deps.getViewport());
         const pos = deps.getPosition();
-        const step = walkStep(pos, cursor, t - last);
+        const step = walkStep(pos, target, t - last);
         last = t;
-        deps.onStep({
-          x: step.x,
-          y: step.y,
-          facing: facingFor(pos.x, cursor.x, deps.getFacing())
-        });
+        const facing = step.arrived ? facingFor(centerX(step.x), cursor.x, deps.getFacing()) : facingFor(pos.x, target.x, deps.getFacing());
+        deps.onStep({ x: step.x, y: step.y, facing });
         rafHandle = raf(frame);
       };
       rafHandle = raf(frame);
@@ -1366,6 +1375,7 @@
         getState: () => snapshot?.currentState ?? "IdleSit",
         getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
         getFacing: () => snapshot?.facing ?? "left",
+        getViewport: () => viewport(doc),
         isLaserActive: () => laser.getIsActive(),
         getCursor: () => laser.getCursor(),
         onDepart: ({ facing }) => patchSnapshot({

@@ -223,6 +223,7 @@ export function mountPet(
 			getState: () => snapshot?.currentState ?? "IdleSit",
 			getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
 			getFacing: () => snapshot?.facing ?? "left",
+			getViewport: () => viewport(doc),
 			isLaserActive: () => laser.getIsActive(),
 			getCursor: () => laser.getCursor(),
 			onDepart: ({ facing }) =>

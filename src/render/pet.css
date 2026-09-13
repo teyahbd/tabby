@@ -71,11 +71,6 @@
 	background-image: url("__TABBY_BOWL_FULL__");
 }
 
-/*
- * Laser pointer (Extra 1) — standin art. Both the toggle icon and the device
- * are plain black rectangles for now; see CLAUDE.md Extra 1 for a reminder
- * to draw the real pixel art later.
- */
 #tabby-laser-toggle {
 	position: fixed;
 	top: 0;

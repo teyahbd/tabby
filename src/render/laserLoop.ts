@@ -1,12 +1,21 @@
-import { type Point } from "./layout.ts";
+import { PET_SIZE, type Point, type Viewport } from "./layout.ts";
 import type { Facing, PetState } from "./petState.ts";
 import { facingFor, walkStep } from "./walkLoop.ts";
 
+function centerX(x: number): number {
+	return x + PET_SIZE / 2;
+}
+
+export function chaseTarget(cursor: Point, viewport: Viewport): Point {
+	const onRightHalf = cursor.x >= viewport.width / 2;
+	return {
+		x: onRightHalf ? cursor.x : cursor.x - PET_SIZE,
+		y: cursor.y,
+	};
+}
+
 export const LASER_CHECK_MS = 200;
 
-// Extra 1's interrupt list — states the laser breaks off to chase from.
-// Napping/Sleeping/Eating/Dragged/ReturningToBase are deliberately absent:
-// the laser only picks the chase back up once one of those ends naturally.
 export const LASER_CHASE_STATES: ReadonlySet<PetState> = new Set<PetState>([
 	"IdleSit",
 	"IdleLie",
@@ -22,13 +31,11 @@ export interface LaserLoopDeps {
 	getState: () => PetState;
 	getPosition: () => Point;
 	getFacing: () => Facing;
+	getViewport: () => Viewport;
 	isLaserActive: () => boolean;
-	// Live cursor position, or null before the first mousemove of the session.
 	getCursor: () => Point | null;
 	onDepart: (next: { facing: Facing }) => void;
 	onStep: (next: Point & { facing: Facing }) => void;
-	// Fired when the laser turns off mid-chase — same handling as a normal
-	// Walking arrival (settle at the current spot, resume idle/wander timers).
 	onDropChase: (next: { currentState: PetState; x: number; y: number }) => void;
 	setTimer?: (fn: () => void, ms: number) => number;
 	clearTimer?: (handle: number) => void;
@@ -62,9 +69,10 @@ export function startLaserLoop(deps: LaserLoopDeps): () => void {
 		}
 		const cursor = deps.getCursor();
 		const start = deps.getPosition();
+		const target = cursor ? chaseTarget(cursor, deps.getViewport()) : null;
 		deps.onDepart({
-			facing: cursor
-				? facingFor(start.x, cursor.x, deps.getFacing())
+			facing: target
+				? facingFor(start.x, target.x, deps.getFacing())
 				: deps.getFacing(),
 		});
 		chase();
@@ -91,14 +99,14 @@ export function startLaserLoop(deps: LaserLoopDeps): () => void {
 				rafHandle = raf(frame);
 				return;
 			}
+			const target = chaseTarget(cursor, deps.getViewport());
 			const pos = deps.getPosition();
-			const step = walkStep(pos, cursor, t - last);
+			const step = walkStep(pos, target, t - last);
 			last = t;
-			deps.onStep({
-				x: step.x,
-				y: step.y,
-				facing: facingFor(pos.x, cursor.x, deps.getFacing()),
-			});
+			const facing = step.arrived
+				? facingFor(centerX(step.x), cursor.x, deps.getFacing())
+				: facingFor(pos.x, target.x, deps.getFacing());
+			deps.onStep({ x: step.x, y: step.y, facing });
 			rafHandle = raf(frame);
 		};
 		rafHandle = raf(frame);

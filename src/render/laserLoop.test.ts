@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { PET_SIZE } from "./layout.ts";
 import type { PetState } from "./petState.ts";
-import { canChaseLaser, LASER_CHECK_MS, startLaserLoop } from "./laserLoop.ts";
+import {
+	canChaseLaser,
+	chaseTarget,
+	LASER_CHECK_MS,
+	startLaserLoop,
+} from "./laserLoop.ts";
 
 test("canChaseLaser covers the interrupt list only when active", () => {
 	for (const s of ["IdleSit", "IdleLie", "Walking", "AtBase"] as PetState[]) {
@@ -17,6 +23,16 @@ test("canChaseLaser covers the interrupt list only when active", () => {
 	] as PetState[]) {
 		assert.equal(canChaseLaser(s, true), false, s);
 	}
+});
+
+test("chaseTarget sits right of the cursor on the right half of the screen, left on the left half", () => {
+	const viewport = { width: 1000, height: 800 };
+	assert.deepEqual(chaseTarget({ x: 800, y: 50 }, viewport), { x: 800, y: 50 });
+	assert.deepEqual(chaseTarget({ x: 200, y: 50 }, viewport), {
+		x: 200 - PET_SIZE,
+		y: 50,
+	});
+	assert.deepEqual(chaseTarget({ x: 500, y: 50 }, viewport), { x: 500, y: 50 });
 });
 
 function harness() {
@@ -60,6 +76,8 @@ function harness() {
 	};
 }
 
+const VIEWPORT = { width: 400, height: 800 };
+
 test("startLaserLoop does nothing while inactive, and keeps polling", () => {
 	const h = harness();
 	let departed = false;
@@ -68,6 +86,7 @@ test("startLaserLoop does nothing while inactive, and keeps polling", () => {
 		getState: () => "IdleSit",
 		getPosition: () => ({ x: 0, y: 0 }),
 		getFacing: () => "left",
+		getViewport: () => VIEWPORT,
 		isLaserActive: () => false,
 		getCursor: () => ({ x: 500, y: 500 }),
 		onDepart: () => {
@@ -98,6 +117,7 @@ test("startLaserLoop interrupts an idle-ish state to chase the cursor", () => {
 		getState: () => state,
 		getPosition: () => pos,
 		getFacing: () => facing,
+		getViewport: () => VIEWPORT,
 		isLaserActive: () => true,
 		getCursor: () => ({ x: 300, y: 0 }),
 		onDepart: (next) => {
@@ -127,6 +147,46 @@ test("startLaserLoop interrupts an idle-ish state to chase the cursor", () => {
 	assert.ok(h.hasFrame, "keeps chasing frame over frame while active");
 });
 
+test("startLaserLoop keeps facing the travel direction mid-run, only flipping to face the cursor once arrived", () => {
+	const h = harness();
+	let state: PetState = "IdleSit";
+	let pos = { x: 0, y: 0 };
+	let facing: "left" | "right" = "left";
+
+	startLaserLoop({
+		getState: () => state,
+		getPosition: () => pos,
+		getFacing: () => facing,
+		getViewport: () => VIEWPORT,
+		isLaserActive: () => true,
+		getCursor: () => ({ x: 300, y: 0 }),
+		onDepart: (next) => {
+			state = "Walking";
+			facing = next.facing;
+		},
+		onStep: (next) => {
+			pos = { x: next.x, y: next.y };
+			facing = next.facing;
+		},
+		onDropChase: () => {},
+		setTimer: h.setTimer,
+		clearTimer: h.clearTimer,
+		raf: h.raf,
+		cancelRaf: h.cancelRaf,
+		now: h.now,
+	});
+
+	h.fireTimer();
+	assert.equal(facing, "right");
+
+	h.advance(2_500);
+	assert.equal(facing, "right");
+
+	for (let i = 0; i < 200 && h.hasFrame; i++) h.advance(100);
+	assert.equal(pos.x, 300);
+	assert.equal(facing, "left");
+});
+
 test("startLaserLoop settles to IdleSit when the laser turns off mid-chase", () => {
 	const h = harness();
 	let state: PetState = "Walking";
@@ -138,6 +198,7 @@ test("startLaserLoop settles to IdleSit when the laser turns off mid-chase", () 
 		getState: () => state,
 		getPosition: () => pos,
 		getFacing: () => "left",
+		getViewport: () => VIEWPORT,
 		isLaserActive: () => active,
 		getCursor: () => ({ x: 300, y: 0 }),
 		onDepart: () => {},
@@ -171,6 +232,7 @@ test("startLaserLoop abandons a chase if the state changes mid-step (e.g. a drag
 		getState: () => state,
 		getPosition: () => ({ x: 0, y: 0 }),
 		getFacing: () => "left",
+		getViewport: () => VIEWPORT,
 		isLaserActive: () => true,
 		getCursor: () => ({ x: 300, y: 0 }),
 		onDepart: () => {
@@ -202,6 +264,7 @@ test("stopping the laser loop cancels pending work", () => {
 		getState: () => "IdleSit",
 		getPosition: () => ({ x: 0, y: 0 }),
 		getFacing: () => "left",
+		getViewport: () => VIEWPORT,
 		isLaserActive: () => false,
 		getCursor: () => null,
 		onDepart: () => {},

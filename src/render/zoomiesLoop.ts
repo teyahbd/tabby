@@ -70,7 +70,6 @@ export interface ZoomiesLoopDeps {
 	onStep: (pos: Point) => void;
 	onArrive: (next: { currentState: PetState; x: number; y: number }) => void;
 	isNightVisiting?: () => boolean;
-	// "laser wins" — a due trigger is skipped and rescheduled while active.
 	isLaserActive?: () => boolean;
 	setTimer?: (fn: () => void, ms: number) => number;
 	clearTimer?: (handle: number) => void;

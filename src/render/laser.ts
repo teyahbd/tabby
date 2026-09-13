@@ -19,9 +19,6 @@ export interface LaserHandle {
 	unmount: () => void;
 }
 
-// Mounts the laser toggle icon (always present, click to flip laser mode)
-// plus the pointer device and beam (rendered only while active). Toggle
-// state is intentionally not persisted — see CLAUDE.md Extra 1.
 export function mountLaser(doc: Document = document): LaserHandle {
 	let active = false;
 	let cursor: Point | null = null;
@@ -63,9 +60,6 @@ export function mountLaser(doc: Document = document): LaserHandle {
 		toggle.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
 	};
 
-	// Combines translate (fixed position) and rotate (facing the cursor) into
-	// one transform — an inline style replaces the whole property, so both
-	// have to be set together rather than split across CSS and JS.
 	const applyDeviceTransform = (angleDeg: number) => {
 		const pos = laserDevicePosition(viewport());
 		device.style.transform = `translate(${pos.x}px, ${pos.y}px) rotate(${angleDeg}deg)`;
