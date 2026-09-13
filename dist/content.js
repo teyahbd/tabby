@@ -589,11 +589,11 @@
     const device = doc.createElement("div");
     device.id = LASER_DEVICE_ID;
     device.setAttribute("aria-hidden", "true");
-    device.hidden = true;
+    device.style.display = "none";
     const beam = doc.createElementNS(SVG_NS, "svg");
     beam.setAttribute("id", LASER_BEAM_ID);
     beam.setAttribute("aria-hidden", "true");
-    beam.setAttribute("hidden", "");
+    beam.style.display = "none";
     const line = doc.createElementNS(SVG_NS, "line");
     line.setAttribute("id", LASER_BEAM_LINE_ID);
     beam.appendChild(line);
@@ -638,9 +638,8 @@
     const setActive = (next) => {
       if (active === next) return;
       active = next;
-      device.hidden = !active;
-      if (active) beam.removeAttribute("hidden");
-      else beam.setAttribute("hidden", "");
+      device.style.display = active ? "block" : "none";
+      beam.style.display = active ? "block" : "none";
       if (active) {
         positionDevice();
         updateBeam();
