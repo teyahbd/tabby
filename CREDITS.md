@@ -16,6 +16,11 @@ drop the files into `Cat Sprites/` (git-ignored), then run the build.
 Only a processed, single-cat sprite sheet is embedded (as a data URI) in the
 built `dist/` output.
 
+## Bed, bowl, and laser pointer sprites
+
+`src/assets/bed.png`, `src/assets/bowl-empty.png`, `src/assets/bowl-full.png`,
+and `src/assets/laser-pointer.png` are hand-drawn pixel art by the project's author — original work, not part of the DelineArte pack. Committed to the repo.
+
 ## Meow sounds
 
 The petting-reaction meows in `src/assets/sounds/` are derived from
@@ -24,11 +29,6 @@ The petting-reaction meows in `src/assets/sounds/` are derived from
 (public domain). CC0 imposes no conditions; the credit is kept here as a
 courtesy. The clip bytes are embedded in the built `dist/` output and played
 via WebAudio.
-
-## Bed sprite
-
-`src/assets/bed.png` — hand-made 48×32 pixel-art bed, drawn at 4× in the page.
-Committed to the repo.
 
 ## Bed name label font
 

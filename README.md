@@ -47,6 +47,8 @@ Cat sprites are by DelineArte — see [`CREDITS.md`](CREDITS.md). The raw files
 are not committed (license forbids redistributing them); `Cat Sprites/` is
 git-ignored. Obtain the pack separately to rebuild the art locally.
 
+The accessories (e.g. bed, bowl, and laser pointer sprites) are hand-drawn originals by the repo's author.
+
 ## Sounds
 
 The petting meows are derived from a CC0 freesound clip by itinerantmonk108 —
