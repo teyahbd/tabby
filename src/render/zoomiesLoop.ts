@@ -54,13 +54,7 @@ export interface ZoomiesLoopDeps {
 	getPosition: () => Point;
 	getFacing: () => Facing;
 	getViewport: () => Viewport;
-	// A dash in progress to resume on mount, in place of waiting out the
-	// usual delay timer — see Fix 5. `endAt` is wall-clock (Date.now()-based)
-	// since it has to survive a reload; converted to the loop's monotonic
-	// clock internally.
 	getResumeZoomies?: () => { target: Point; endAt: number } | undefined;
-	// Fired once per session (not per dash) so the wall-clock end time can be
-	// persisted for a resume — see getResumeZoomies.
 	onZoomiesStart?: (next: { endAt: number }) => void;
 	onDepart: (next: {
 		facing: Facing;

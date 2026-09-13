@@ -88,10 +88,6 @@ export function startNightLoop(deps: NightLoopDeps): () => void {
 		const state = deps.getState();
 
 		if (!isNight(nowDate())) {
-			// A resumed ReturningToBase can find it's already past 7am (e.g. the
-			// walk was mid-flight when the tab closed for the night) — treat
-			// that the same as waking a Sleeping pet rather than leaving it
-			// stuck mid-walk with nothing left to drive it home.
 			if (state === "Sleeping" || state === "ReturningToBase") deps.onWake();
 			arm();
 			return;
@@ -102,8 +98,6 @@ export function startNightLoop(deps: NightLoopDeps): () => void {
 			return;
 		}
 
-		// Resuming mid-walk (Fix 5) — pick the walk back up from wherever it
-		// left off instead of the fresh-transition teleport-to-bed below.
 		if (state === "ReturningToBase") {
 			startReturn();
 			return;

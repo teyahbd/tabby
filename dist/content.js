@@ -967,6 +967,25 @@
     }
     return false;
   }
+  function resolveWalkResume(snapshot) {
+    if (!snapshot || snapshot.currentState !== "Walking") return void 0;
+    if (snapshot.zoomiesEndAt != null) return void 0;
+    if (typeof snapshot.targetX !== "number" || typeof snapshot.targetY !== "number") {
+      return void 0;
+    }
+    return { x: snapshot.targetX, y: snapshot.targetY };
+  }
+  function resolveZoomiesResume(snapshot) {
+    if (!snapshot || snapshot.currentState !== "Walking") return void 0;
+    if (snapshot.zoomiesEndAt == null) return void 0;
+    if (typeof snapshot.targetX !== "number" || typeof snapshot.targetY !== "number") {
+      return void 0;
+    }
+    return {
+      target: { x: snapshot.targetX, y: snapshot.targetY },
+      endAt: snapshot.zoomiesEndAt
+    };
+  }
   function initialSnapshot(viewport2, now = Date.now()) {
     const pos = basePosition(viewport2);
     return {
@@ -1318,14 +1337,7 @@
         getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
         getFacing: () => snapshot?.facing ?? "left",
         getViewport: () => viewport(doc),
-        getResumeTarget: () => {
-          if (!snapshot || snapshot.currentState !== "Walking") return void 0;
-          if (snapshot.zoomiesEndAt != null) return void 0;
-          if (typeof snapshot.targetX !== "number" || typeof snapshot.targetY !== "number") {
-            return void 0;
-          }
-          return { x: snapshot.targetX, y: snapshot.targetY };
-        },
+        getResumeTarget: () => resolveWalkResume(snapshot),
         onDepart: ({ facing, targetX, targetY }) => patchSnapshot({
           currentState: "Walking",
           facing,
@@ -1342,17 +1354,7 @@
         getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
         getFacing: () => snapshot?.facing ?? "left",
         getViewport: () => viewport(doc),
-        getResumeZoomies: () => {
-          if (!snapshot || snapshot.currentState !== "Walking") return void 0;
-          if (snapshot.zoomiesEndAt == null) return void 0;
-          if (typeof snapshot.targetX !== "number" || typeof snapshot.targetY !== "number") {
-            return void 0;
-          }
-          return {
-            target: { x: snapshot.targetX, y: snapshot.targetY },
-            endAt: snapshot.zoomiesEndAt
-          };
-        },
+        getResumeZoomies: () => resolveZoomiesResume(snapshot),
         onZoomiesStart: ({ endAt }) => patchSnapshot({ zoomiesEndAt: endAt }, false),
         onDepart: ({ facing, targetX, targetY }) => patchSnapshot({
           currentState: "Walking",

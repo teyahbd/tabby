@@ -27,15 +27,8 @@ export interface PetSnapshot {
 	facing: Facing;
 	currentState: PetState;
 	stateEnteredAt: number;
-	// Walking's current destination (plain wander or a zoomies dash) — needed
-	// to resume the walk toward the same point rather than picking a new one.
-	// Absent for every other state.
 	targetX?: number;
 	targetY?: number;
-	// Wall-clock end time of the current zoomies session. Present only while
-	// currentState is "Walking" *and* the walk is a zoomies dash, not a plain
-	// wander — that's how the two are told apart on resume, since both reuse
-	// the "Walking" state.
 	zoomiesEndAt?: number;
 }
 
@@ -52,13 +45,6 @@ export function isStable(state: PetState): boolean {
 	return STABLE_STATES.has(state);
 }
 
-// Resumable but not "stable" (see isStable) — these are mid-motion states
-// that can pick their walk back up on resume instead of collapsing, given
-// enough saved info to know where they were headed:
-// - ReturningToBase always qualifies — its target (basePosition) is derived
-//   live, never stored.
-// - Walking only qualifies with a stored target, since its destination
-//   (plain wander or zoomies dash) is otherwise random and unrecoverable.
 function isResumableMotion(saved: PetSnapshot): boolean {
 	if (saved.currentState === "ReturningToBase") return true;
 	if (saved.currentState === "Walking") {
@@ -67,6 +53,37 @@ function isResumableMotion(saved: PetSnapshot): boolean {
 		);
 	}
 	return false;
+}
+
+export function resolveWalkResume(
+	snapshot: PetSnapshot | null | undefined,
+): Point | undefined {
+	if (!snapshot || snapshot.currentState !== "Walking") return undefined;
+	if (snapshot.zoomiesEndAt != null) return undefined;
+	if (
+		typeof snapshot.targetX !== "number" ||
+		typeof snapshot.targetY !== "number"
+	) {
+		return undefined;
+	}
+	return { x: snapshot.targetX, y: snapshot.targetY };
+}
+
+export function resolveZoomiesResume(
+	snapshot: PetSnapshot | null | undefined,
+): { target: Point; endAt: number } | undefined {
+	if (!snapshot || snapshot.currentState !== "Walking") return undefined;
+	if (snapshot.zoomiesEndAt == null) return undefined;
+	if (
+		typeof snapshot.targetX !== "number" ||
+		typeof snapshot.targetY !== "number"
+	) {
+		return undefined;
+	}
+	return {
+		target: { x: snapshot.targetX, y: snapshot.targetY },
+		endAt: snapshot.zoomiesEndAt,
+	};
 }
 
 export function initialSnapshot(
@@ -110,11 +127,6 @@ export function resumeSnapshot(
 		isStable(saved.currentState) || isResumableMotion(saved)
 			? saved
 			: { ...saved, currentState: "IdleSit" as const, stateEnteredAt: now };
-	// A saved position can predate the current viewport (e.g. the extension
-	// was reloaded into a smaller page than it last saved against) — pull it
-	// back on screen the same way a live resize would, without re-anchoring
-	// resting states to their canonical spot (that would break Eating's
-	// walk-back-to-the-bowl resume).
 	const pos = clampPoint({ x: resumed.x, y: resumed.y }, viewport);
 	if (pos.x === resumed.x && pos.y === resumed.y) return resumed;
 	return { ...resumed, x: pos.x, y: pos.y };

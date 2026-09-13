@@ -1,15 +1,10 @@
-/*
- * Bed art: a 48x32 native-pixel PNG drawn at 4x (keep in sync with
- * BED_WIDTH/BED_HEIGHT in layout.ts). build.mjs inlines it as a data: URI in
- * place of the token below. bed.ts snaps the transform to whole pixels so
- * image-rendering: pixelated stays crisp.
- */
 @font-face {
 	font-family: "Tabby Pixel";
 	src: url("__TABBY_PIXEL_FONT__") format("woff2");
 	font-display: swap;
 }
 
+/* width/height keep in sync with BED_WIDTH/BED_HEIGHT in layout.ts — CSS can't import the TS constants, and nothing checks these match */
 #tabby-bed {
 	position: fixed;
 	top: 0;
@@ -45,12 +40,7 @@
 	white-space: nowrap;
 }
 
-/*
- * Bowl art: two 16x12 native-pixel PNGs, drawn at 4x (keep in sync with
- * BOWL_WIDTH/BOWL_HEIGHT in layout.ts). build.mjs inlines each as a data: URI
- * in place of the tokens below. bowl.ts snaps the transform to whole pixels so
- * image-rendering: pixelated stays crisp.
- */
+/* width/height keep in sync with BOWL_WIDTH/BOWL_HEIGHT in layout.ts — CSS can't import the TS constants, and nothing checks these match */
 #tabby-bowl {
 	position: fixed;
 	top: 0;
@@ -111,8 +101,8 @@
 	stroke-width: 2;
 }
 
+/* --cell keeps in sync with PET_SIZE in layout.ts — CSS can't import the TS constant, and nothing checks these match */
 #tabby-root {
-	/* One sprite cell on screen. Keep in sync with PET_SIZE in layout.ts. */
 	--cell: 176px;
 	position: fixed;
 	top: 0;
@@ -124,13 +114,7 @@
 	will-change: transform;
 }
 
-/*
- * Sprite sheet: DelineArte cat pack, one 32x32-cell colour ("Calico Cat.png"),
- * a 4-column x 8-row grid. build.mjs inlines it as a data: URI in place of the
- * token below; if the pack is absent it appends a plain-box fallback instead.
- * Every frame offset is a multiple of --cell: col c, row r -> position
- * calc(var(--cell) * -c) calc(var(--cell) * -r).
- */
+/* Sprite sheet is a 4-column x 8-row grid (DelineArte "Calico Cat.png", gitignored under Cat Sprites/ — not in the repo at all). Every background-position below is a multiple of --cell: col c, row r -> calc(var(--cell) * -c) calc(var(--cell) * -r) */
 #tabby-sprite {
 	--face: 1;
 	position: relative;

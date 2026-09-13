@@ -25,6 +25,8 @@ import { startPetting } from "./petting.ts";
 import {
 	PET_STATE_KEY,
 	repositionOnResize,
+	resolveWalkResume,
+	resolveZoomiesResume,
 	resumeSnapshot,
 	type PetSnapshot,
 } from "./petState.ts";
@@ -151,18 +153,7 @@ export function mountPet(
 			getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
 			getFacing: () => snapshot?.facing ?? "left",
 			getViewport: () => viewport(doc),
-			getResumeTarget: () => {
-				if (!snapshot || snapshot.currentState !== "Walking") return undefined;
-				// zoomiesLoop's resume claims this walk instead
-				if (snapshot.zoomiesEndAt != null) return undefined;
-				if (
-					typeof snapshot.targetX !== "number" ||
-					typeof snapshot.targetY !== "number"
-				) {
-					return undefined;
-				}
-				return { x: snapshot.targetX, y: snapshot.targetY };
-			},
+			getResumeTarget: () => resolveWalkResume(snapshot),
 			onDepart: ({ facing, targetX, targetY }) =>
 				patchSnapshot({
 					currentState: "Walking",
@@ -182,20 +173,7 @@ export function mountPet(
 			getPosition: () => ({ x: snapshot?.x ?? 0, y: snapshot?.y ?? 0 }),
 			getFacing: () => snapshot?.facing ?? "left",
 			getViewport: () => viewport(doc),
-			getResumeZoomies: () => {
-				if (!snapshot || snapshot.currentState !== "Walking") return undefined;
-				if (snapshot.zoomiesEndAt == null) return undefined;
-				if (
-					typeof snapshot.targetX !== "number" ||
-					typeof snapshot.targetY !== "number"
-				) {
-					return undefined;
-				}
-				return {
-					target: { x: snapshot.targetX, y: snapshot.targetY },
-					endAt: snapshot.zoomiesEndAt,
-				};
-			},
+			getResumeZoomies: () => resolveZoomiesResume(snapshot),
 			onZoomiesStart: ({ endAt }) =>
 				patchSnapshot({ zoomiesEndAt: endAt }, false),
 			onDepart: ({ facing, targetX, targetY }) =>

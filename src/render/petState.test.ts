@@ -4,6 +4,8 @@ import { basePosition, eatingSpot, PET_SIZE } from "./layout.ts";
 import {
 	initialSnapshot,
 	repositionOnResize,
+	resolveWalkResume,
+	resolveZoomiesResume,
 	resumeSnapshot,
 } from "./petState.ts";
 
@@ -44,8 +46,6 @@ test("stable states resume exactly as saved", () => {
 });
 
 test("resume clamps a saved position that's now off-screen (Fix 3)", () => {
-	// Simulates reloading the extension into a smaller page than the one the
-	// position was last saved against.
 	const small = { width: 500, height: 400 };
 	for (const currentState of ["IdleSit", "Napping", "AtBase"] as const) {
 		const saved = {
@@ -63,9 +63,6 @@ test("resume clamps a saved position that's now off-screen (Fix 3)", () => {
 		assert.equal(resumed.currentState, currentState);
 	}
 
-	// Eating clamps back on screen too, but keeps its saved spot rather than
-	// jumping straight to the bowl — hungerLoop's resume walk still needs a
-	// real starting position to walk from.
 	const eating = {
 		x: 900,
 		y: 700,
@@ -127,9 +124,29 @@ test("Walking with a stored target resumes exactly, toward that target (Fix 5)",
 	};
 	assert.deepEqual(resumeSnapshot(saved, viewport, 999), saved);
 
-	// A zoomies dash is stored the same way, plus a session end time.
 	const dashing = { ...saved, zoomiesEndAt: 12_345 };
 	assert.deepEqual(resumeSnapshot(dashing, viewport, 999), dashing);
+});
+
+test("a resumed Walking snapshot is claimed by exactly one of walkLoop or zoomiesLoop", () => {
+	const walking = {
+		x: 10,
+		y: 20,
+		facing: "right" as const,
+		currentState: "Walking" as const,
+		stateEnteredAt: 42,
+		targetX: 500,
+		targetY: 300,
+	};
+	assert.deepEqual(resolveWalkResume(walking), { x: 500, y: 300 });
+	assert.equal(resolveZoomiesResume(walking), undefined);
+
+	const dashing = { ...walking, zoomiesEndAt: 12_345 };
+	assert.equal(resolveWalkResume(dashing), undefined);
+	assert.deepEqual(resolveZoomiesResume(dashing), {
+		target: { x: 500, y: 300 },
+		endAt: 12_345,
+	});
 });
 
 test("ReturningToBase resumes exactly, walking home instead of collapsing (Fix 5)", () => {

@@ -121,7 +121,6 @@ test("startZoomiesLoop skips when suppressed or at night, and rearms", () => {
 	assert.equal(departed, false);
 	assert.ok(h.hasTimer);
 
-	// also skipped at night even from an otherwise-eligible state
 	const h2 = harness();
 	let departed2 = false;
 	startZoomiesLoop({
@@ -179,7 +178,6 @@ test("startZoomiesLoop dashes through several destinations then settles to IdleS
 		cancelRaf: h.cancelRaf,
 		now: h.now,
 		nowDate: day,
-		// first roll picks the delay, later rolls feed duration/speed/destinations
 		rng: () => 0.5,
 	});
 
@@ -241,8 +239,6 @@ test("startZoomiesLoop resumes an in-progress dash toward its stored target (Fix
 		getPosition: () => pos,
 		getFacing: () => "left",
 		getViewport: () => ({ width: 1000, height: 800 }),
-		// endAt just barely in the future — the resumed session has only a
-		// moment left, so it should settle as soon as this one dash arrives.
 		getResumeZoomies: () => ({ target: { x: 500, y: 0 }, endAt: 1 }),
 		onDepart: () => {
 			departed = true;

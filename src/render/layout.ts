@@ -43,11 +43,6 @@ export function basePosition(viewport: Viewport, petSize = PET_SIZE): Point {
 }
 
 export function bedPosition(viewport: Viewport): Point {
-	// The bed sprite is wider than the pet cell, so it is pinned to the
-	// bottom-right corner with the same inset as the pet rather than centered on
-	// the pet's footprint. Its bottom edge sits on the pet's floor.
-	// Whole-pixel coords only — sub-pixel placement blurs `image-rendering:
-	// pixelated` even when it is set correctly.
 	return {
 		x: Math.round(Math.max(0, viewport.width - BED_WIDTH - BASE_MARGIN)),
 		y: Math.round(Math.max(0, viewport.height - BED_HEIGHT - BASE_MARGIN)),

@@ -57,8 +57,6 @@ export interface WalkLoopDeps {
 	getPosition: () => Point;
 	getFacing: () => Facing;
 	getViewport: () => Viewport;
-	// A stored destination to resume toward on mount, in place of the usual
-	// wander-timer wait — see Fix 5 (walking resumes instead of collapsing).
 	getResumeTarget?: () => Point | undefined;
 	onDepart: (next: {
 		facing: Facing;
