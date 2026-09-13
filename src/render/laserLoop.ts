@@ -38,6 +38,7 @@ export interface LaserLoopDeps {
 	onDepart: (next: { facing: Facing }) => void;
 	onStep: (next: Point & { facing: Facing }) => void;
 	onDropChase: (next: { currentState: PetState; x: number; y: number }) => void;
+	onArrive?: () => void;
 	setTimer?: (fn: () => void, ms: number) => number;
 	clearTimer?: (handle: number) => void;
 	raf?: (fn: (t: number) => void) => number;
@@ -81,6 +82,7 @@ export function startLaserLoop(deps: LaserLoopDeps): () => void {
 
 	const chase = () => {
 		let last = now();
+		let hasArrived = false;
 		const frame = (t: number) => {
 			if (deps.getState() !== "Walking") {
 				rafHandle = null;
@@ -108,6 +110,14 @@ export function startLaserLoop(deps: LaserLoopDeps): () => void {
 				? facingFor(centerX(step.x), cursor.x, deps.getFacing())
 				: facingFor(pos.x, target.x, deps.getFacing());
 			deps.onStep({ x: step.x, y: step.y, facing });
+			if (step.arrived) {
+				if (!hasArrived) {
+					hasArrived = true;
+					deps.onArrive?.();
+				}
+			} else {
+				hasArrived = false;
+			}
 			rafHandle = raf(frame);
 		};
 		rafHandle = raf(frame);

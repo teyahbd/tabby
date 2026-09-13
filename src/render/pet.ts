@@ -216,6 +216,7 @@ export function mountPet(
 			onStep: ({ x, y, facing }) => patchSnapshot({ x, y, facing }, false),
 			onDropChase: ({ currentState, x, y }) =>
 				patchSnapshot({ currentState, x, y, stateEnteredAt: Date.now() }),
+			onArrive: () => reactToPet(root, doc),
 		});
 
 		stopNap = startNapLoop({

@@ -10,6 +10,12 @@ export const LASER_TOGGLE_ID = "tabby-laser-toggle";
 export const LASER_DEVICE_ID = "tabby-laser-device";
 export const LASER_BEAM_ID = "tabby-laser-beam";
 export const LASER_BEAM_LINE_ID = "tabby-laser-beam-line";
+export const LASER_BEAM_GLOW_A_ID = "tabby-laser-beam-glow-a";
+export const LASER_BEAM_GLOW_B_ID = "tabby-laser-beam-glow-b";
+export const LASER_BEAM_DOT_ID = "tabby-laser-beam-dot";
+
+const BEAM_GLOW_OFFSET = 3;
+const BEAM_DOT_RADIUS = 3;
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -38,9 +44,19 @@ export function mountLaser(doc: Document = document): LaserHandle {
 	beam.setAttribute("id", LASER_BEAM_ID);
 	beam.setAttribute("aria-hidden", "true");
 	beam.style.display = "none";
+	const glowA = doc.createElementNS(SVG_NS, "line");
+	glowA.setAttribute("id", LASER_BEAM_GLOW_A_ID);
+	const glowB = doc.createElementNS(SVG_NS, "line");
+	glowB.setAttribute("id", LASER_BEAM_GLOW_B_ID);
 	const line = doc.createElementNS(SVG_NS, "line");
 	line.setAttribute("id", LASER_BEAM_LINE_ID);
+	const dot = doc.createElementNS(SVG_NS, "circle");
+	dot.setAttribute("id", LASER_BEAM_DOT_ID);
+	dot.setAttribute("r", String(BEAM_DOT_RADIUS));
+	beam.appendChild(glowA);
+	beam.appendChild(glowB);
 	beam.appendChild(line);
+	beam.appendChild(dot);
 
 	const viewport = () => ({
 		width: doc.documentElement.clientWidth,
@@ -77,6 +93,26 @@ export function mountLaser(doc: Document = document): LaserHandle {
 		line.setAttribute("y1", String(tip.y));
 		line.setAttribute("x2", String(cursor.x));
 		line.setAttribute("y2", String(cursor.y));
+
+		const dx = cursor.x - tip.x;
+		const dy = cursor.y - tip.y;
+		const len = Math.hypot(dx, dy) || 1;
+		const offsetX = (-dy / len) * BEAM_GLOW_OFFSET;
+		const offsetY = (dx / len) * BEAM_GLOW_OFFSET;
+
+		glowA.setAttribute("x1", String(tip.x + offsetX));
+		glowA.setAttribute("y1", String(tip.y + offsetY));
+		glowA.setAttribute("x2", String(cursor.x + offsetX));
+		glowA.setAttribute("y2", String(cursor.y + offsetY));
+
+		glowB.setAttribute("x1", String(tip.x - offsetX));
+		glowB.setAttribute("y1", String(tip.y - offsetY));
+		glowB.setAttribute("x2", String(cursor.x - offsetX));
+		glowB.setAttribute("y2", String(cursor.y - offsetY));
+
+		dot.setAttribute("cx", String(cursor.x));
+		dot.setAttribute("cy", String(cursor.y));
+
 		deviceAngle =
 			Math.atan2(cursor.y - tip.y, cursor.x - tip.x) * (180 / Math.PI);
 		applyDeviceTransform(deviceAngle);

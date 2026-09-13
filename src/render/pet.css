@@ -101,6 +101,17 @@
 	stroke-width: 2;
 }
 
+#tabby-laser-beam-glow-a,
+#tabby-laser-beam-glow-b {
+	stroke: #ff8a8a;
+	stroke-width: 1;
+	opacity: 0.6;
+}
+
+#tabby-laser-beam-dot {
+	fill: #ff2b2b;
+}
+
 /* --cell keeps in sync with PET_SIZE in layout.ts — CSS can't import the TS constant, and nothing checks these match */
 #tabby-root {
 	--cell: 176px;
