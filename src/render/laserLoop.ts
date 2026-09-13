@@ -1,4 +1,4 @@
-import { PET_SIZE, type Point, type Viewport } from "./layout.ts";
+import { clampPoint, PET_SIZE, type Point, type Viewport } from "./layout.ts";
 import type { Facing, PetState } from "./petState.ts";
 import { facingFor, walkStep } from "./walkLoop.ts";
 
@@ -8,10 +8,11 @@ function centerX(x: number): number {
 
 export function chaseTarget(cursor: Point, viewport: Viewport): Point {
 	const onRightHalf = cursor.x >= viewport.width / 2;
-	return {
+	const target = {
 		x: onRightHalf ? cursor.x : cursor.x - PET_SIZE,
 		y: cursor.y,
 	};
+	return clampPoint(target, viewport);
 }
 
 export const LASER_CHECK_MS = 200;

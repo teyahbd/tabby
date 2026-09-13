@@ -35,6 +35,19 @@ test("chaseTarget sits right of the cursor on the right half of the screen, left
 	assert.deepEqual(chaseTarget({ x: 500, y: 50 }, viewport), { x: 500, y: 50 });
 });
 
+test("chaseTarget stays fully on screen even when the cursor is right at an edge", () => {
+	const viewport = { width: 1000, height: 800 };
+	assert.deepEqual(chaseTarget({ x: 999, y: 50 }, viewport), {
+		x: 1000 - PET_SIZE,
+		y: 50,
+	});
+	assert.deepEqual(chaseTarget({ x: 10, y: 50 }, viewport), { x: 0, y: 50 });
+	assert.deepEqual(chaseTarget({ x: 500, y: 799 }, viewport), {
+		x: 500,
+		y: 800 - PET_SIZE,
+	});
+});
+
 function harness() {
 	let pendingTimer: (() => void) | null = null;
 	let pendingFrame: ((t: number) => void) | null = null;
@@ -76,7 +89,7 @@ function harness() {
 	};
 }
 
-const VIEWPORT = { width: 400, height: 800 };
+const VIEWPORT = { width: 500, height: 800 };
 
 test("startLaserLoop does nothing while inactive, and keeps polling", () => {
 	const h = harness();

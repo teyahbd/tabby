@@ -680,10 +680,11 @@
   }
   function chaseTarget(cursor, viewport2) {
     const onRightHalf = cursor.x >= viewport2.width / 2;
-    return {
+    const target = {
       x: onRightHalf ? cursor.x : cursor.x - PET_SIZE,
       y: cursor.y
     };
+    return clampPoint(target, viewport2);
   }
   var LASER_CHECK_MS = 200;
   var LASER_CHASE_STATES = /* @__PURE__ */ new Set([
