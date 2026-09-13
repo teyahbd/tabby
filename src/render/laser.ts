@@ -37,7 +37,8 @@ export function mountLaser(doc: Document = document): LaserHandle {
 
 	const device = doc.createElement("div");
 	device.id = LASER_DEVICE_ID;
-	device.setAttribute("aria-hidden", "true");
+	device.setAttribute("role", "button");
+	device.setAttribute("aria-label", "Turn off laser pointer");
 	device.style.display = "none";
 
 	const beam = doc.createElementNS(SVG_NS, "svg");
@@ -63,11 +64,20 @@ export function mountLaser(doc: Document = document): LaserHandle {
 		height: doc.documentElement.clientHeight,
 	});
 
-	const deviceTip = () => {
+	const deviceCenter = () => {
 		const pos = laserDevicePosition(viewport());
 		return {
 			x: pos.x + LASER_DEVICE_WIDTH / 2,
 			y: pos.y + LASER_DEVICE_HEIGHT / 2,
+		};
+	};
+
+	const nozzleTip = (angleDeg: number) => {
+		const center = deviceCenter();
+		const rad = (angleDeg * Math.PI) / 180;
+		return {
+			x: center.x + Math.cos(rad) * (LASER_DEVICE_WIDTH / 2),
+			y: center.y + Math.sin(rad) * (LASER_DEVICE_HEIGHT / 2),
 		};
 	};
 
@@ -88,7 +98,11 @@ export function mountLaser(doc: Document = document): LaserHandle {
 		beam.setAttribute("width", String(v.width));
 		beam.setAttribute("height", String(v.height));
 		if (!cursor) return;
-		const tip = deviceTip();
+		const center = deviceCenter();
+		deviceAngle =
+			Math.atan2(cursor.y - center.y, cursor.x - center.x) * (180 / Math.PI);
+		applyDeviceTransform(deviceAngle);
+		const tip = nozzleTip(deviceAngle);
 		line.setAttribute("x1", String(tip.x));
 		line.setAttribute("y1", String(tip.y));
 		line.setAttribute("x2", String(cursor.x));
@@ -112,10 +126,6 @@ export function mountLaser(doc: Document = document): LaserHandle {
 
 		dot.setAttribute("cx", String(cursor.x));
 		dot.setAttribute("cy", String(cursor.y));
-
-		deviceAngle =
-			Math.atan2(cursor.y - tip.y, cursor.x - tip.x) * (180 / Math.PI);
-		applyDeviceTransform(deviceAngle);
 	};
 
 	const onMove = (event: Event) => {
@@ -127,6 +137,7 @@ export function mountLaser(doc: Document = document): LaserHandle {
 	const setActive = (next: boolean) => {
 		if (active === next) return;
 		active = next;
+		toggle.style.display = active ? "none" : "block";
 		device.style.display = active ? "block" : "none";
 		beam.style.display = active ? "block" : "none";
 		if (active) {
@@ -135,7 +146,8 @@ export function mountLaser(doc: Document = document): LaserHandle {
 		}
 	};
 
-	const onClick = () => setActive(!active);
+	const onToggleClick = () => setActive(true);
+	const onDeviceClick = () => setActive(false);
 
 	const onResize = () => {
 		positionToggle();
@@ -145,7 +157,8 @@ export function mountLaser(doc: Document = document): LaserHandle {
 
 	positionToggle();
 	positionDevice();
-	toggle.addEventListener("click", onClick);
+	toggle.addEventListener("click", onToggleClick);
+	device.addEventListener("click", onDeviceClick);
 	doc.body.appendChild(toggle);
 	doc.body.appendChild(device);
 	doc.body.appendChild(beam);
@@ -160,7 +173,8 @@ export function mountLaser(doc: Document = document): LaserHandle {
 		unmount: () => {
 			view?.removeEventListener("resize", onResize);
 			view?.removeEventListener("mousemove", onMove);
-			toggle.removeEventListener("click", onClick);
+			toggle.removeEventListener("click", onToggleClick);
+			device.removeEventListener("click", onDeviceClick);
 			toggle.remove();
 			device.remove();
 			beam.remove();

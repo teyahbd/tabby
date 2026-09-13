@@ -75,11 +75,11 @@ export function eatingSpot(viewport: Viewport): Point {
 	};
 }
 
-export const LASER_TOGGLE_WIDTH = 32;
-export const LASER_TOGGLE_HEIGHT = 32;
+export const LASER_TOGGLE_WIDTH = 48;
+export const LASER_TOGGLE_HEIGHT = 48;
 export const LASER_TOGGLE_GAP = 14;
-export const LASER_DEVICE_WIDTH = 40;
-export const LASER_DEVICE_HEIGHT = 40;
+export const LASER_DEVICE_WIDTH = 96;
+export const LASER_DEVICE_HEIGHT = 96;
 
 export function laserTogglePosition(viewport: Viewport): Point {
 	const bowl = bowlPosition(viewport);

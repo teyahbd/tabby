@@ -6,6 +6,7 @@ const BOWL_ART = {
 	__TABBY_BOWL_EMPTY__: "src/assets/bowl-empty.png",
 	__TABBY_BOWL_FULL__: "src/assets/bowl-full.png",
 	__TABBY_BED__: "src/assets/bed.png",
+	__TABBY_LASER_POINTER__: "src/assets/laser-pointer.png",
 };
 
 const PIXEL_FONT = "src/assets/press-start-2p.woff2";

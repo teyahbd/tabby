@@ -65,27 +65,32 @@
 	position: fixed;
 	top: 0;
 	left: 0;
-	width: 32px;
-	height: 32px;
+	width: 48px;
+	height: 48px;
 	z-index: 2147483646;
 	pointer-events: auto;
 	cursor: pointer;
 	will-change: transform;
-	background: #000;
-	border: 2px solid #fff;
-	box-sizing: border-box;
+	background-image: url("__TABBY_LASER_POINTER__");
+	background-repeat: no-repeat;
+	background-size: 100% 100%;
+	image-rendering: pixelated;
 }
 
 #tabby-laser-device {
 	position: fixed;
 	top: 0;
 	left: 0;
-	width: 40px;
-	height: 40px;
+	width: 96px;
+	height: 96px;
 	z-index: 2147483646;
-	pointer-events: none;
+	pointer-events: auto;
+	cursor: pointer;
 	will-change: transform;
-	background: #000;
+	background-image: url("__TABBY_LASER_POINTER__");
+	background-repeat: no-repeat;
+	background-size: 100% 100%;
+	image-rendering: pixelated;
 }
 
 #tabby-laser-beam {

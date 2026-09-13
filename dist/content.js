@@ -92,11 +92,11 @@
       y: basePosition(viewport2).y
     };
   }
-  var LASER_TOGGLE_WIDTH = 32;
-  var LASER_TOGGLE_HEIGHT = 32;
+  var LASER_TOGGLE_WIDTH = 48;
+  var LASER_TOGGLE_HEIGHT = 48;
   var LASER_TOGGLE_GAP = 14;
-  var LASER_DEVICE_WIDTH = 40;
-  var LASER_DEVICE_HEIGHT = 40;
+  var LASER_DEVICE_WIDTH = 96;
+  var LASER_DEVICE_HEIGHT = 96;
   function laserTogglePosition(viewport2) {
     const bowl = bowlPosition(viewport2);
     return {
@@ -593,7 +593,8 @@
     toggle.setAttribute("aria-label", "Toggle laser pointer");
     const device = doc.createElement("div");
     device.id = LASER_DEVICE_ID;
-    device.setAttribute("aria-hidden", "true");
+    device.setAttribute("role", "button");
+    device.setAttribute("aria-label", "Turn off laser pointer");
     device.style.display = "none";
     const beam = doc.createElementNS(SVG_NS, "svg");
     beam.setAttribute("id", LASER_BEAM_ID);
@@ -616,11 +617,19 @@
       width: doc.documentElement.clientWidth,
       height: doc.documentElement.clientHeight
     });
-    const deviceTip = () => {
+    const deviceCenter = () => {
       const pos = laserDevicePosition(viewport2());
       return {
         x: pos.x + LASER_DEVICE_WIDTH / 2,
         y: pos.y + LASER_DEVICE_HEIGHT / 2
+      };
+    };
+    const nozzleTip = (angleDeg) => {
+      const center = deviceCenter();
+      const rad = angleDeg * Math.PI / 180;
+      return {
+        x: center.x + Math.cos(rad) * (LASER_DEVICE_WIDTH / 2),
+        y: center.y + Math.sin(rad) * (LASER_DEVICE_HEIGHT / 2)
       };
     };
     const positionToggle = () => {
@@ -637,7 +646,10 @@
       beam.setAttribute("width", String(v.width));
       beam.setAttribute("height", String(v.height));
       if (!cursor) return;
-      const tip = deviceTip();
+      const center = deviceCenter();
+      deviceAngle = Math.atan2(cursor.y - center.y, cursor.x - center.x) * (180 / Math.PI);
+      applyDeviceTransform(deviceAngle);
+      const tip = nozzleTip(deviceAngle);
       line.setAttribute("x1", String(tip.x));
       line.setAttribute("y1", String(tip.y));
       line.setAttribute("x2", String(cursor.x));
@@ -657,8 +669,6 @@
       glowB.setAttribute("y2", String(cursor.y - offsetY));
       dot.setAttribute("cx", String(cursor.x));
       dot.setAttribute("cy", String(cursor.y));
-      deviceAngle = Math.atan2(cursor.y - tip.y, cursor.x - tip.x) * (180 / Math.PI);
-      applyDeviceTransform(deviceAngle);
     };
     const onMove = (event) => {
       const e = event;
@@ -668,6 +678,7 @@
     const setActive = (next) => {
       if (active === next) return;
       active = next;
+      toggle.style.display = active ? "none" : "block";
       device.style.display = active ? "block" : "none";
       beam.style.display = active ? "block" : "none";
       if (active) {
@@ -675,7 +686,8 @@
         updateBeam();
       }
     };
-    const onClick = () => setActive(!active);
+    const onToggleClick = () => setActive(true);
+    const onDeviceClick = () => setActive(false);
     const onResize = () => {
       positionToggle();
       positionDevice();
@@ -683,7 +695,8 @@
     };
     positionToggle();
     positionDevice();
-    toggle.addEventListener("click", onClick);
+    toggle.addEventListener("click", onToggleClick);
+    device.addEventListener("click", onDeviceClick);
     doc.body.appendChild(toggle);
     doc.body.appendChild(device);
     doc.body.appendChild(beam);
@@ -696,7 +709,8 @@
       unmount: () => {
         view?.removeEventListener("resize", onResize);
         view?.removeEventListener("mousemove", onMove);
-        toggle.removeEventListener("click", onClick);
+        toggle.removeEventListener("click", onToggleClick);
+        device.removeEventListener("click", onDeviceClick);
         toggle.remove();
         device.remove();
         beam.remove();
