@@ -410,6 +410,12 @@
         return;
       }
       const hunger = deps.getHunger();
+      const awayMeal = catchUpAwayMeal(hunger, nowMs());
+      if (awayMeal) {
+        deps.onAwayMeal?.(awayMeal);
+        arm();
+        return;
+      }
       if (hunger.bowlFilled && isHungry(hunger.lastAteAt, nowMs()) && EAT_START_STATES.has(deps.getState())) {
         startEat();
         return;
@@ -1510,16 +1516,19 @@
           void storage2.set(NIGHT_VISIT_KEY, nightVisitUntil);
         }
       });
+      const applyAwayMeal = (awayMeal) => {
+        hunger = awayMeal;
+        void storage2.set(HUNGER_KEY, awayMeal);
+        if (snapshot?.currentState !== "Sleeping" && snapshot?.currentState !== "Napping") {
+          reactToPet(root, doc);
+        }
+      };
       const savedHunger = await storage2.get(HUNGER_KEY);
       if (disposed) return;
       hunger = normalizeHunger(savedHunger);
-      const awayMeal = snapshot.currentState === "Eating" ? null : catchUpAwayMeal(hunger, Date.now());
-      if (awayMeal) {
-        hunger = awayMeal;
-        await storage2.set(HUNGER_KEY, awayMeal);
-        if (snapshot.currentState !== "Sleeping" && snapshot.currentState !== "Napping") {
-          reactToPet(root, doc);
-        }
+      if (snapshot.currentState !== "Eating") {
+        const awayMeal = catchUpAwayMeal(hunger, Date.now());
+        if (awayMeal) applyAwayMeal(awayMeal);
       }
       unsubHunger = storage2.subscribe(HUNGER_KEY, (value) => {
         hunger = normalizeHunger(value);
@@ -1531,6 +1540,7 @@
         getFacing: () => snapshot?.facing ?? "left",
         getViewport: () => viewport(doc),
         getEnteredAt: () => snapshot?.stateEnteredAt ?? Date.now(),
+        onAwayMeal: applyAwayMeal,
         onEatStart: ({ facing }) => {
           setApproachingBowl(true);
           patchSnapshot({

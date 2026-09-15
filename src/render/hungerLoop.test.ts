@@ -304,6 +304,57 @@ test("the bowl stays full until the pet actually finishes eating", () => {
 	assert.equal(s.stored.bowlFilled, false);
 });
 
+test("a long suspend mid-loop empties the bowl instead of animating a sudden meal", () => {
+	const h = harness();
+	let clockMs = 10_000_000;
+	let current: PetState = "IdleSit";
+	let stored: HungerState = {
+		bowlFilled: true,
+		lastAteAt: clockMs - 2 * HOUR,
+		bowlFilledAt: clockMs - 2 * HOUR,
+		lastSeenAt: clockMs,
+	};
+	const events: string[] = [];
+
+	const stop = startHungerLoop({
+		getState: () => current,
+		getHunger: () => stored,
+		getPosition: () => ({ x: 100, y: 100 }),
+		getFacing: () => "right",
+		getViewport: () => viewport,
+		getEnteredAt: () => clockMs,
+		onEatStart: () => {
+			current = "Eating";
+			events.push("start");
+		},
+		onEatStep: () => {},
+		onEatArrive: () => {},
+		onFinishEating: () => {},
+		onAwayMeal: (next) => {
+			stored = next;
+			events.push("awayMeal");
+		},
+		setTimer: h.setTimer,
+		clearTimer: h.clearTimer,
+		raf: h.raf,
+		cancelRaf: h.cancelRaf,
+		now: h.now,
+		nowMs: () => clockMs,
+	});
+
+	assert.deepEqual(events, []);
+
+	clockMs +=
+		HUNGER_COOLDOWN_MS - 2 * HOUR + AWAY_EAT_THRESHOLD_MS + EAT_DURATION_MS + 1;
+	h.fireTimer();
+
+	assert.deepEqual(events, ["awayMeal"]);
+	assert.equal(stored.bowlFilled, false);
+	assert.equal(current, "IdleSit");
+
+	stop();
+});
+
 test("stopping the hunger loop cancels pending work", () => {
 	const s = scene("IdleSit", filled);
 	assert.ok(s.h.hasFrame);

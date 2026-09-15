@@ -95,6 +95,7 @@ export interface HungerLoopDeps {
 	onEatStep: (pos: Point) => void;
 	onEatArrive: (next: Point & { facing: Facing }) => void;
 	onFinishEating: (next: { ateAt: number; x: number; y: number }) => void;
+	onAwayMeal?: (next: HungerState) => void;
 	onSeen?: (now: number) => void;
 	setTimer?: (fn: () => void, ms: number) => number;
 	clearTimer?: (handle: number) => void;
@@ -194,6 +195,12 @@ export function startHungerLoop(deps: HungerLoopDeps): () => void {
 			return;
 		}
 		const hunger = deps.getHunger();
+		const awayMeal = catchUpAwayMeal(hunger, nowMs());
+		if (awayMeal) {
+			deps.onAwayMeal?.(awayMeal);
+			arm();
+			return;
+		}
 		if (
 			hunger.bowlFilled &&
 			isHungry(hunger.lastAteAt, nowMs()) &&
